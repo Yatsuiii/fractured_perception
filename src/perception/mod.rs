@@ -3,9 +3,15 @@
 /// One authoritative World produces three completely different PlayerViews.
 /// The renderer never touches World directly; it only draws what a PlayerView says.
 ///
-/// Blind        → no map, only sound cues
-/// VisualAnalyst → full map + fabricated tiles that look identical to real ones
-/// Hallucinating → distorted map, doubled entities, unstable reality
+/// Each role's builder lives in its own module:
+///   blind.rs        → no map, only sound cues
+///   analyst.rs      → full map + fabricated tiles that look identical to real ones
+///   hallucinating.rs → distorted map, doubled entities, unstable reality
+
+mod analyst;
+mod blind;
+mod hallucinating;
+
 use crate::{
     map::Tile,
     player::{Player, Role},
@@ -20,6 +26,7 @@ pub enum CellColor {
     Memory,      // revealed but not currently visible
     Floor,       // visible real floor
     Wall,        // visible real wall
+    Door,        // visible door between rooms
     Fabricated,  // Analyst: tile that might not be real (visually = Floor, subtly different)
     Distorted,   // Hallucinating: tile the mind got wrong
 }
@@ -40,11 +47,15 @@ pub struct PerceivedEntity {
 
 #[derive(Clone, Copy)]
 pub enum EntityColor {
-    Self_,     // the observer themselves
-    Ally,      // other players
-    Npc,       // NPC, trusted
-    NpcDoubt,  // NPC, trust < 0.5
-    Ghost,     // Hallucinating: ghost duplicate
+    Self_,      // the observer themselves
+    Ally,       // other players
+    Npc,        // NPC, trusted
+    NpcDoubt,   // NPC, trust < 0.5
+    Ghost,      // Hallucinating: ghost duplicate
+    AuraTrust,  // Blind: NPC aura, high trust (green)
+    AuraDoubt,  // Blind: NPC aura, low trust (red)
+    AuraAlly,   // Blind: teammate aura (cyan)
+    AuraPuzzle, // Blind: unsolved puzzle pulse (yellow)
 }
 
 pub struct PanelLine {
@@ -77,13 +88,13 @@ pub struct PlayerView {
 
 pub fn build_view(
     player: &Player,
-    player_entities: &[Entity], // all three player entities
+    player_entities: &[Entity],
     world: &World,
 ) -> PlayerView {
     match player.role {
-        Role::Blind => build_blind(player, player_entities, world),
-        Role::VisualAnalyst => build_analyst(player, player_entities, world),
-        Role::Hallucinating => build_hallucinating(player, player_entities, world),
+        Role::Blind         => blind::build(player, player_entities, world),
+        Role::VisualAnalyst => analyst::build(player, player_entities, world),
+        Role::Hallucinating => hallucinating::build(player, player_entities, world),
     }
 }
 
@@ -131,7 +142,7 @@ fn direction_arrow(dx: f32, dy: f32) -> &'static str {
     }
 }
 
-// --- Blank cell helpers ---
+// --- Shared cell helpers ---
 
 fn hidden_cell() -> PerceivedCell {
     PerceivedCell { glyph: ' ', color: CellColor::Hidden }
@@ -142,6 +153,7 @@ fn cell_from_tile(tile: Tile, visible: bool, revealed: bool) -> PerceivedCell {
         match tile {
             Tile::Wall  => PerceivedCell { glyph: '#', color: CellColor::Wall },
             Tile::Floor => PerceivedCell { glyph: '.', color: CellColor::Floor },
+            Tile::Door  => PerceivedCell { glyph: '+', color: CellColor::Door },
         }
     } else if revealed {
         PerceivedCell { glyph: tile.glyph(), color: CellColor::Memory }
@@ -150,355 +162,7 @@ fn cell_from_tile(tile: Tile, visible: bool, revealed: bool) -> PerceivedCell {
     }
 }
 
-// --- THE BLIND ---
-
-fn build_blind(player: &Player, player_entities: &[Entity], world: &World) -> PlayerView {
-    let w = world.map.width;
-    let h = world.map.height;
-
-    // Entire map is dark — the Blind sees nothing.
-    let cells = vec![PerceivedCell { glyph: '░', color: CellColor::Hidden }; w * h];
-
-    // Only their own entity is rendered.
-    let mut entities = Vec::new();
-    if let Some(pos) = world.get_position(player.entity) {
-        entities.push(PerceivedEntity {
-            col: pos.x as u16,
-            row: pos.y as u16,
-            glyph: '@',
-            color: EntityColor::Self_,
-            is_ghost: false,
-        });
-    }
-
-    // Side panel: sound cues from nearby NPCs and players.
-    let mut panel = vec![
-        PanelLine { text: "[ THE BLIND ]".into(),  color: PanelColor::Cyan },
-        PanelLine { text: String::new(),            color: PanelColor::Grey },
-        PanelLine { text: "YOU HEAR:".into(),       color: PanelColor::White },
-        PanelLine { text: String::new(),            color: PanelColor::Grey },
-    ];
-
-    let mut heard_anything = false;
-
-    if let Some(obs) = world.get_position(player.entity) {
-        let (ox, oy) = (obs.x, obs.y);
-
-        // NPCs within sound radius (larger than visual FOV).
-        for (_, npc_pos, marker) in world.all_npcs() {
-            let dx = npc_pos.x - ox;
-            let dy = npc_pos.y - oy;
-            let dist = (dx * dx + dy * dy).sqrt();
-            if dist < 12.0 {
-                let arrow = direction_arrow(dx, dy);
-                let intensity = if dist < 4.0 { "close" } else if dist < 8.0 { "near" } else { "far" };
-                panel.push(PanelLine {
-                    text: format!("  {} {} [{}]", arrow, marker.name, intensity),
-                    color: PanelColor::Yellow,
-                });
-                panel.push(PanelLine { text: "    \"...\"".into(), color: PanelColor::Grey });
-                heard_anything = true;
-            }
-        }
-
-        // Footsteps from other players.
-        for &e in player_entities {
-            if e == player.entity { continue; }
-            if let Some(p) = world.get_position(e) {
-                let dx = p.x - ox;
-                let dy = p.y - oy;
-                let dist = (dx * dx + dy * dy).sqrt();
-                if dist < 8.0 {
-                    let arrow = direction_arrow(dx, dy);
-                    panel.push(PanelLine {
-                        text: format!("  {} Footsteps", arrow),
-                        color: PanelColor::Grey,
-                    });
-                    heard_anything = true;
-                }
-            }
-        }
-    }
-
-    if !heard_anything {
-        panel.push(PanelLine { text: "  (silence)".into(), color: PanelColor::DarkGrey });
-    }
-
-    // T/C/I/B readout — Blind has the most self-reflection.
-    let hs = &player.hidden_state;
-    panel.push(PanelLine { text: String::new(), color: PanelColor::Grey });
-    panel.push(PanelLine { text: "─────────────────────".into(), color: PanelColor::DarkGrey });
-    panel.push(PanelLine { text: stat_bar("T", hs.bar(hs.truth)),   color: PanelColor::Green  });
-    panel.push(PanelLine { text: stat_bar("C", hs.bar(hs.chaos)),   color: PanelColor::Red    });
-    panel.push(PanelLine { text: stat_bar("I", hs.bar(hs.illusion)),color: PanelColor::Yellow });
-    panel.push(PanelLine { text: stat_bar("B", hs.bar(hs.balance)), color: PanelColor::Cyan   });
-
-    append_puzzle_progress(&mut panel, world);
-
-    PlayerView { role: player.role, map_width: w, map_height: h, cells, entities, panel_lines: panel }
-}
-
-// --- THE VISUAL ANALYST ---
-
-fn build_analyst(player: &Player, player_entities: &[Entity], world: &World) -> PlayerView {
-    let w = world.map.width;
-    let h = world.map.height;
-    let seed = world.map.seed;
-
-    let mut cells = Vec::with_capacity(w * h);
-
-    for y in 0..h {
-        for x in 0..w {
-            let visible  = player.fov.is_visible(x, y);
-            let revealed = player.fov.is_revealed(x, y);
-            let true_tile = world.map.get(x, y);
-
-            if visible {
-                // Fabricated tiles look like floors but are secretly walls.
-                // Visually identical — the Analyst cannot tell by looking.
-                let fabricated = true_tile == Tile::Floor && is_fabricated(seed, x, y);
-                let color = if fabricated { CellColor::Fabricated } else {
-                    match true_tile { Tile::Floor => CellColor::Floor, Tile::Wall => CellColor::Wall }
-                };
-                cells.push(PerceivedCell { glyph: true_tile.glyph(), color });
-            } else if revealed {
-                cells.push(PerceivedCell { glyph: true_tile.glyph(), color: CellColor::Memory });
-            } else {
-                cells.push(hidden_cell());
-            }
-        }
-    }
-
-    // Entities
-    let mut entities = build_entities_standard(player, player_entities, world);
-
-    // NPCs with trust-based appearance.
-    for (npc_entity, npc_pos, marker) in world.all_npcs() {
-        let x = npc_pos.x as usize;
-        let y = npc_pos.y as usize;
-        if x < w && y < h && player.fov.is_visible(x, y) {
-            let trust = player.trust_for(npc_entity, marker.base_trust);
-            let (glyph, color) = if trust >= 0.5 {
-                ('W', EntityColor::Npc)
-            } else {
-                ('?', EntityColor::NpcDoubt)
-            };
-            entities.push(PerceivedEntity {
-                col: npc_pos.x as u16,
-                row: npc_pos.y as u16,
-                glyph,
-                color,
-                is_ghost: false,
-            });
-
-            // Low trust: entity flickers (skip every other frame via time-based toggle).
-            // Simple approximation: don't render at all when trust < 0.3.
-            if trust < 0.3 {
-                entities.pop();
-            }
-        }
-    }
-
-    // Side panel — trust levels + fabrication warning.
-    let mut panel = vec![
-        PanelLine { text: "[ VISUAL ANALYST ]".into(), color: PanelColor::Cyan },
-        PanelLine { text: String::new(),               color: PanelColor::Grey },
-        PanelLine { text: "NPC TRUST:".into(),         color: PanelColor::White },
-    ];
-
-    for (npc_entity, _, marker) in world.all_npcs() {
-        let t = player.trust_for(npc_entity, marker.base_trust);
-        let bar_w = 8usize;
-        let filled = (t * bar_w as f32) as usize;
-        let bar = format!("{}{}",
-            "█".repeat(filled),
-            "░".repeat(bar_w - filled),
-        );
-        let color = if t >= 0.7 { PanelColor::Green }
-                    else if t >= 0.4 { PanelColor::Yellow }
-                    else { PanelColor::Red };
-        panel.push(PanelLine {
-            text: format!("  {:<12} {:.1}", marker.name, t),
-            color,
-        });
-        panel.push(PanelLine { text: format!("  [{}]", bar), color });
-    }
-
-    // Count fabricated tiles currently visible.
-    let fabricated_nearby = (0..h).flat_map(|y| (0..w).map(move |x| (x, y)))
-        .filter(|&(x, y)| {
-            player.fov.is_visible(x, y)
-                && world.map.get(x, y) == Tile::Floor
-                && is_fabricated(seed, x, y)
-        })
-        .count();
-
-    panel.push(PanelLine { text: String::new(), color: PanelColor::Grey });
-    panel.push(PanelLine { text: "─────────────────────".into(), color: PanelColor::DarkGrey });
-    if fabricated_nearby > 0 {
-        panel.push(PanelLine {
-            text: format!("  ⚠ {} anomal{} nearby", fabricated_nearby,
-                if fabricated_nearby == 1 { "y" } else { "ies" }),
-            color: PanelColor::Yellow,
-        });
-        panel.push(PanelLine {
-            text: "  (some tiles are false)".into(),
-            color: PanelColor::DarkGrey,
-        });
-    } else {
-        panel.push(PanelLine { text: "  No anomalies visible".into(), color: PanelColor::DarkGrey });
-    }
-
-    append_puzzle_progress(&mut panel, world);
-
-    PlayerView { role: player.role, map_width: w, map_height: h, cells, entities, panel_lines: panel }
-}
-
-// --- THE HALLUCINATING ---
-
-fn build_hallucinating(player: &Player, player_entities: &[Entity], world: &World) -> PlayerView {
-    let w = world.map.width;
-    let h = world.map.height;
-    let seed = world.map.seed;
-
-    let mut cells = Vec::with_capacity(w * h);
-
-    for y in 0..h {
-        for x in 0..w {
-            let visible  = player.fov.is_visible(x, y);
-            let revealed = player.fov.is_revealed(x, y);
-            let true_tile = world.map.get(x, y);
-
-            if visible {
-                let distorted = is_distorted(seed, x, y);
-                if distorted {
-                    // Flip floor ↔ wall visually. Navigation uses the true map.
-                    let (glyph, color) = match true_tile {
-                        Tile::Floor => ('#', CellColor::Distorted), // floor looks like wall
-                        Tile::Wall  => ('.', CellColor::Distorted), // wall looks like floor
-                    };
-                    cells.push(PerceivedCell { glyph, color });
-                } else {
-                    cells.push(cell_from_tile(true_tile, true, true));
-                }
-            } else if revealed {
-                cells.push(PerceivedCell { glyph: true_tile.glyph(), color: CellColor::Memory });
-            } else {
-                cells.push(hidden_cell());
-            }
-        }
-    }
-
-    // Entities — each one appears twice (real + ghost duplicate).
-    let mut entities = Vec::new();
-
-    for &e in player_entities {
-        let Some(pos) = world.get_position(e) else { continue };
-        let x = pos.x as usize;
-        let y = pos.y as usize;
-        if x >= w || y >= h || !player.fov.is_visible(x, y) { continue; }
-
-        let (glyph, color) = if e == player.entity {
-            ('@', EntityColor::Self_)
-        } else {
-            ('@', EntityColor::Ally)
-        };
-
-        // Real position.
-        entities.push(PerceivedEntity {
-            col: pos.x as u16, row: pos.y as u16,
-            glyph, color, is_ghost: false,
-        });
-
-        // Ghost duplicate at offset.
-        let (gox, goy) = ghost_offset(e);
-        let gc = pos.x as i32 + gox;
-        let gr = pos.y as i32 + goy;
-        if gc >= 0 && gr >= 0 && (gc as usize) < w && (gr as usize) < h {
-            entities.push(PerceivedEntity {
-                col: gc as u16, row: gr as u16,
-                glyph, color: EntityColor::Ghost, is_ghost: true,
-            });
-        }
-    }
-
-    // NPCs also appear doubled.
-    for (npc_entity, npc_pos, _) in world.all_npcs() {
-        let x = npc_pos.x as usize;
-        let y = npc_pos.y as usize;
-        if x >= w || y >= h || !player.fov.is_visible(x, y) { continue; }
-
-        entities.push(PerceivedEntity {
-            col: npc_pos.x as u16, row: npc_pos.y as u16,
-            glyph: 'W', color: EntityColor::Npc, is_ghost: false,
-        });
-
-        let (gox, goy) = ghost_offset(npc_entity);
-        let gc = npc_pos.x as i32 + gox;
-        let gr = npc_pos.y as i32 + goy;
-        if gc >= 0 && gr >= 0 && (gc as usize) < w && (gr as usize) < h {
-            entities.push(PerceivedEntity {
-                col: gc as u16, row: gr as u16,
-                glyph: 'W', color: EntityColor::Ghost, is_ghost: true,
-            });
-        }
-    }
-
-    // Stability = how much of what they see is real.
-    let visible_count = (0..h).flat_map(|y| (0..w).map(move |x| (x, y)))
-        .filter(|&(x, y)| player.fov.is_visible(x, y))
-        .count()
-        .max(1);
-    let distorted_count = (0..h).flat_map(|y| (0..w).map(move |x| (x, y)))
-        .filter(|&(x, y)| player.fov.is_visible(x, y) && is_distorted(seed, x, y))
-        .count();
-    let stability = 1.0 - (distorted_count as f32 / visible_count as f32);
-
-    let ghost_count = entities.iter().filter(|e| e.is_ghost).count();
-
-    let stab_bar_w = 12usize;
-    let filled = (stability * stab_bar_w as f32) as usize;
-    let stab_color = if stability > 0.7 { PanelColor::Green }
-                     else if stability > 0.4 { PanelColor::Yellow }
-                     else { PanelColor::Red };
-
-    let mut panel = vec![
-        PanelLine { text: "[ HALLUCINATING ]".into(),  color: PanelColor::Cyan },
-        PanelLine { text: String::new(),               color: PanelColor::Grey },
-        PanelLine { text: "STABILITY:".into(),         color: PanelColor::White },
-        PanelLine {
-            text: format!("  [{}{}]  {:.0}%",
-                "█".repeat(filled),
-                "░".repeat(stab_bar_w - filled),
-                stability * 100.0),
-            color: stab_color,
-        },
-        PanelLine { text: String::new(),               color: PanelColor::Grey },
-        PanelLine {
-            text: format!("  Ghosts seen: {}", ghost_count),
-            color: PanelColor::Red,
-        },
-        PanelLine { text: String::new(),               color: PanelColor::Grey },
-        PanelLine { text: "─────────────────────".into(), color: PanelColor::DarkGrey },
-        PanelLine { text: "  [reality is uncertain]".into(), color: PanelColor::DarkGrey },
-    ];
-
-    append_puzzle_progress(&mut panel, world);
-
-    PlayerView { role: player.role, map_width: w, map_height: h, cells, entities, panel_lines: panel }
-}
-
-fn append_puzzle_progress(panel: &mut Vec<PanelLine>, world: &World) {
-    let total = world.all_puzzle_tiles().count();
-    let active = world.all_puzzle_tiles().filter(|(_, _, tile)| tile.is_active).count();
-    panel.push(PanelLine { text: String::new(), color: PanelColor::Grey });
-    panel.push(PanelLine {
-        text: format!("Puzzle progress: {}/{} activated", active, total),
-        color: PanelColor::White,
-    });
-}
-
-// --- Shared helpers ---
+// --- Shared entity helpers ---
 
 fn build_entities_standard(
     player: &Player,
@@ -538,6 +202,18 @@ fn build_entities_standard(
     }
 
     out
+}
+
+// --- Shared panel helpers ---
+
+fn append_puzzle_progress(panel: &mut Vec<PanelLine>, world: &World) {
+    let total = world.all_puzzle_tiles().count();
+    let active = world.all_puzzle_tiles().filter(|(_, _, tile)| tile.is_active).count();
+    panel.push(PanelLine { text: String::new(), color: PanelColor::Grey });
+    panel.push(PanelLine {
+        text: format!("Puzzle progress: {}/{} activated", active, total),
+        color: PanelColor::White,
+    });
 }
 
 fn stat_bar(label: &str, v: f32) -> String {

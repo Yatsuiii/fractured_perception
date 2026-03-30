@@ -15,12 +15,12 @@ use crate::{
 use super::{RenderError, Renderer};
 
 // --- Layout constants ---
-const PANEL_SEP_COL: u16   = 51; // '│' separator column
-const PANEL_START_COL: u16 = 53; // side panel text start
+const PANEL_SEP_COL: u16   = 81; // '│' separator column
+const PANEL_START_COL: u16 = 83; // side panel text start
 const MAP_ROW_OFFSET: u16  = 1;  // row 0 = HUD, map starts at row 1
-const HUD_WIDTH: usize     = 79; // total HUD separator width in columns
+const HUD_WIDTH: usize     = 110; // total HUD separator width in columns
 const ROLE_COL: u16        = 24; // column where the active role name appears
-const KEYBIND_COL: u16     = 55; // column where the keybind hint begins
+const KEYBIND_COL: u16     = 85; // column where the keybind hint begins
 
 pub struct TerminalRenderer {
     stdout:   io::Stdout,
@@ -52,10 +52,11 @@ impl Renderer for TerminalRenderer {
     /// function pushes the complete frame at once, eliminating mid-render stutter.
     fn draw_view(&mut self, state: &GameState, view: &PlayerView) -> Result<(), RenderError> {
         match state {
-            GameState::MainMenu => self.draw_main_menu()?,
-            GameState::Playing  => self.draw_playing(view)?,
-            GameState::Paused   => { self.draw_playing(view)?; self.draw_pause_overlay()?; }
-            GameState::GameOver => self.draw_game_over()?,
+            GameState::MainMenu   => self.draw_main_menu()?,
+            GameState::RoleSelect => self.draw_role_select()?,
+            GameState::Playing    => self.draw_playing(view)?,
+            GameState::Paused     => { self.draw_playing(view)?; self.draw_pause_overlay()?; }
+            GameState::GameOver   => self.draw_game_over()?,
         }
         self.stdout.flush()?;
         Ok(())
@@ -86,16 +87,49 @@ impl TerminalRenderer {
         Ok(())
     }
 
+    fn draw_role_select(&mut self) -> Result<(), RenderError> {
+        queue!(
+            self.stdout,
+            cursor::MoveTo(2, 2), SetForegroundColor(Color::White),
+            Print("╔══════════════════════════════╗"),
+            cursor::MoveTo(2, 3), Print("║       CHOOSE YOUR ROLE       ║"),
+            cursor::MoveTo(2, 4), Print("╚══════════════════════════════╝"),
+            ResetColor,
+            cursor::MoveTo(2, 6), SetForegroundColor(Color::DarkGrey),
+            Print("  [1]  THE BLIND"),
+            cursor::MoveTo(2, 7), Print("       Navigate by sound alone."),
+            cursor::MoveTo(2, 8), Print("       You hear what others cannot."),
+            ResetColor,
+            cursor::MoveTo(2, 10), SetForegroundColor(Color::Cyan),
+            Print("  [2]  THE VISUAL ANALYST"),
+            cursor::MoveTo(2, 11), Print("       You see everything."),
+            cursor::MoveTo(2, 12), Print("       Half of it is a lie."),
+            ResetColor,
+            cursor::MoveTo(2, 14), SetForegroundColor(Color::DarkYellow),
+            Print("  [3]  THE HALLUCINATING"),
+            cursor::MoveTo(2, 15), Print("       Reality bends around you."),
+            cursor::MoveTo(2, 16), Print("       Trust nothing you see."),
+            ResetColor,
+            cursor::MoveTo(2, 18), SetForegroundColor(Color::DarkGrey),
+            Print("  [Esc] Back    [Q] Quit"),
+            ResetColor,
+        )?;
+        Ok(())
+    }
+
     fn draw_game_over(&mut self) -> Result<(), RenderError> {
         queue!(
             self.stdout,
-            cursor::MoveTo(2, 3), SetForegroundColor(Color::Red),
-            Print("╔════════════════════════╗"),
-            cursor::MoveTo(2, 4), Print("║      GAME  OVER        ║"),
-            cursor::MoveTo(2, 5), Print("╚════════════════════════╝"),
+            cursor::MoveTo(2, 3), SetForegroundColor(Color::Green),
+            Print("╔══════════════════════════╗"),
+            cursor::MoveTo(2, 4), Print("║   ALL PUZZLES  SOLVED   ║"),
+            cursor::MoveTo(2, 5), Print("╚══════════════════════════╝"),
             ResetColor,
-            cursor::MoveTo(2, 7), Print("  [Enter]  Try Again"),
-            cursor::MoveTo(2, 8), Print("  [Q]      Quit"),
+            cursor::MoveTo(2, 7), SetForegroundColor(Color::DarkGrey),
+            Print("  Reality has been restored."),
+            ResetColor,
+            cursor::MoveTo(2, 9), Print("  [Enter]  Play Again"),
+            cursor::MoveTo(2, 10), Print("  [Q]      Quit"),
         )?;
         Ok(())
     }
@@ -212,6 +246,7 @@ fn cell_appearance(glyph: char, color: CellColor) -> (Color, char) {
         CellColor::Memory     => (Color::DarkGrey,   glyph),
         CellColor::Floor      => (Color::DarkGrey,   glyph),
         CellColor::Wall       => (Color::White,      glyph),
+        CellColor::Door       => (Color::DarkYellow, glyph),
         CellColor::Fabricated => (Color::DarkGrey,   glyph), // identical to floor — intentional
         CellColor::Distorted  => (Color::DarkYellow, glyph),
     }
@@ -219,11 +254,15 @@ fn cell_appearance(glyph: char, color: CellColor) -> (Color, char) {
 
 fn entity_color(ec: EntityColor) -> Color {
     match ec {
-        EntityColor::Self_    => Color::Yellow,
-        EntityColor::Ally     => Color::Cyan,
-        EntityColor::Npc      => Color::Green,
-        EntityColor::NpcDoubt => Color::DarkYellow,
-        EntityColor::Ghost    => Color::DarkRed,
+        EntityColor::Self_      => Color::Yellow,
+        EntityColor::Ally       => Color::Cyan,
+        EntityColor::Npc        => Color::Green,
+        EntityColor::NpcDoubt   => Color::DarkYellow,
+        EntityColor::Ghost      => Color::DarkRed,
+        EntityColor::AuraTrust  => Color::Green,
+        EntityColor::AuraDoubt  => Color::DarkRed,
+        EntityColor::AuraAlly   => Color::DarkCyan,
+        EntityColor::AuraPuzzle => Color::DarkYellow,
     }
 }
 

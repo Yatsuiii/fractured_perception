@@ -77,12 +77,14 @@ impl Fov {
             if x == x1 && y == y1 {
                 return true;
             }
-            // Intermediate (non-origin) opaque tiles block the ray.
-            if (x != x0 || y != y0)
-                && map.is_in_bounds(x, y)
-                && map.get(x as usize, y as usize).is_opaque()
-            {
-                return false;
+            // Intermediate (non-origin) tiles block the ray if opaque or out of bounds.
+            if x != x0 || y != y0 {
+                if !map.is_in_bounds(x, y) {
+                    return false;
+                }
+                if map.get(x as usize, y as usize).is_opaque() {
+                    return false;
+                }
             }
             let e2 = 2 * err;
             if e2 > -dy {

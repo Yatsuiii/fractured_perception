@@ -18,6 +18,9 @@ pub enum Key {
     Enter,
     Space,
     Q,
+    One,
+    Two,
+    Three,
 }
 
 pub struct InputState {
@@ -73,6 +76,9 @@ fn map_keycode(code: KeyCode) -> Option<Key> {
         KeyCode::Char('d') | KeyCode::Char('D') => Some(Key::D),
         KeyCode::Char('q') | KeyCode::Char('Q') => Some(Key::Q),
         KeyCode::Char('e') | KeyCode::Char('E') => Some(Key::E),
+        KeyCode::Char('1') => Some(Key::One),
+        KeyCode::Char('2') => Some(Key::Two),
+        KeyCode::Char('3') => Some(Key::Three),
         KeyCode::Up => Some(Key::Up),
         KeyCode::Down => Some(Key::Down),
         KeyCode::Left => Some(Key::Left),

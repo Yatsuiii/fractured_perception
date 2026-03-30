@@ -1,10 +1,19 @@
-use crate::{state::GameState, world::entity::Entity};
+use crate::{player::Role, state::GameState, world::entity::Entity};
 
 pub enum Event {
     PlayerMoved { entity: Entity, x: f32, y: f32 },
     EntityDied { entity: Entity },
     PuzzleActivated { sequence_id: u32 },
     StateChange { to: GameState },
+    Ping { from_role: Role },
+    TrustChanged { npc: Entity, delta: f32, reason: TrustReason },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TrustReason {
+    PuzzleSolved,
+    NpcProximity,
+    PingNearby,
 }
 
 pub struct EventBus {

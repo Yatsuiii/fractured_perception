@@ -3,6 +3,7 @@ pub mod transitions;
 #[derive(Debug, Clone, PartialEq)]
 pub enum GameState {
     MainMenu,
+    RoleSelect,
     Playing,
     Paused,
     GameOver,

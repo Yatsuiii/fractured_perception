@@ -2,53 +2,53 @@ use crate::world::{entity::Entity, World};
 
 pub enum AiAction {
     Move { dx: i32, dy: i32 },
-    Attack { target: Entity },
     Wait,
 }
 
 /// Pure read-only decision — the engine applies the result.
-pub fn decide(entity: Entity, player: Entity, world: &World) -> AiAction {
+///
+/// The Watcher drifts toward the nearest player within 10 tiles.
+/// Outside that radius it stays still — cryptic, not aggressive.
+pub fn decide(entity: Entity, players: &[Entity], world: &World) -> AiAction {
     let (ex, ey) = match world.get_position(entity) {
         Some(p) => (p.x as i32, p.y as i32),
-        None => return AiAction::Wait,
+        None    => return AiAction::Wait,
     };
 
-    // Only act when visible to the player (symmetric FOV).
-    if !world.fov.is_visible(ex as usize, ey as usize) {
+    // Find the nearest player by squared distance.
+    let nearest = players
+        .iter()
+        .filter_map(|&p| {
+            world.get_position(p).map(|pos| {
+                let dx = pos.x as i32 - ex;
+                let dy = pos.y as i32 - ey;
+                (dx, dy, dx * dx + dy * dy)
+            })
+        })
+        .min_by_key(|&(_, _, dist2)| dist2);
+
+    let (dx, dy, dist2) = match nearest {
+        Some(n) => n,
+        None    => return AiAction::Wait,
+    };
+
+    // Stay still when no player is within 10 tiles.
+    if dist2 > 100 {
         return AiAction::Wait;
     }
 
-    let (px, py) = match world.get_position(player) {
-        Some(p) => (p.x as i32, p.y as i32),
-        None => return AiAction::Wait,
+    // Prefer the axis with the greater gap; try the other as fallback.
+    let (primary, fallback) = if dx.abs() >= dy.abs() {
+        ((dx.signum(), 0_i32), (0_i32, dy.signum()))
+    } else {
+        ((0_i32, dy.signum()), (dx.signum(), 0_i32))
     };
 
-    let dx = (px - ex).signum();
-    let dy = (py - ey).signum();
-
-    // Diagonal preferred; fall back to cardinal if blocked.
-    let candidates = [
-        (dx, dy),
-        (dx, 0),
-        (0, dy),
-    ];
-
-    for (mx, my) in candidates {
+    for (mx, my) in [primary, fallback] {
         if mx == 0 && my == 0 {
             continue;
         }
-        let nx = ex + mx;
-        let ny = ey + my;
-
-        if let Some(target) = world.entity_at(nx, ny) {
-            if target == player {
-                return AiAction::Attack { target };
-            }
-            // Another entity — skip this direction.
-            continue;
-        }
-
-        if world.map.is_walkable(nx, ny) {
+        if world.map.is_walkable(ex + mx, ey + my) {
             return AiAction::Move { dx: mx, dy: my };
         }
     }

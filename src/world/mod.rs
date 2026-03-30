@@ -65,6 +65,10 @@ impl World {
         self.positions.get_mut(&entity)
     }
 
+    pub fn get_npc_marker(&self, entity: Entity) -> Option<&NpcMarker> {
+        self.npc_markers.get(&entity)
+    }
+
     // --- Iterators ---
 
     pub fn all_positions(&self) -> impl Iterator<Item = (Entity, &Position)> {

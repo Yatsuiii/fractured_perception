@@ -3,7 +3,9 @@ use super::GameState;
 pub fn is_valid(from: &GameState, to: &GameState) -> bool {
     matches!(
         (from, to),
-        (GameState::MainMenu, GameState::Playing)
+        (GameState::MainMenu, GameState::RoleSelect)
+            | (GameState::RoleSelect, GameState::Playing)
+            | (GameState::RoleSelect, GameState::MainMenu)
             | (GameState::Playing, GameState::Paused)
             | (GameState::Playing, GameState::GameOver)
             | (GameState::Paused, GameState::Playing)

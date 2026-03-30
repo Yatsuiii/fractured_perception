@@ -61,25 +61,54 @@ The first and primary puzzle. Tiles must be activated in sequence. The order cha
 
 ## Current build status
 
-### Completed
+### Completed — Rust prototype
 
 - Full game concept and design
 - Core design and perception systems documented
+- Engine loop — input → update → perception → render, 16 ms frame cap
+- Three-role perception system (Blind, VisualAnalyst, Hallucinating) — fully distinct views
+- FOV system — Bresenham LOS, per-player reveal tracking
+- World / ECS — entity spawning, position, NPC marker, puzzle tile components
+- Map — 6-room dungeon with corridors, deterministic seed
+- State machine — MainMenu → Playing ↔ Paused, Playing → GameOver
+- Role-gated puzzle activation — Blind→#1, Analyst→#2, Hallucinating→#3
+- Puzzle progress tracking — 3/3 triggers win screen
+- Co-op team event log — shared side panel, 8-entry rolling, 4 s fade
+- Ping system — E key, logged to all role panels
+- Session log file — timestamped events written to `logs/session_<unix>.log` per run
+- Watcher NPC — spawned, moves toward nearest player every 0.5 s, visible to all roles
 
-### Building now
+### Todo — Rust prototype
 
-- Rust engine prototype
-- Role-based perception, movement, and puzzle interaction in Rust
+#### Bugs (fix first)
+- [ ] Can't quit from Paused state — Q key not handled; must resume first
+- [ ] FOV ray skips out-of-bounds tiles instead of blocking — edge-case vision leak
+- [ ] `map::get()` / `map::set()` have no bounds check — will panic on bad input
+
+#### Core systems (not yet functional)
+- [ ] NPC trust interactions — `adjust_trust()` exists but is never called; trust never changes
+- [ ] T/C/I/B hidden state consequences — stats accumulate and display but never affect perception, NPCs, or outcomes
+- [ ] NPC dialogue / interaction system — no way for players to talk to the Watcher; no hints, trades, or story
+- [ ] Loss condition — no way to fail; game runs indefinitely if players can't solve puzzles
+
+#### Gameplay depth
+- [ ] Echo Chamber puzzle — tiles placed but no sequence ordering or per-role signals; everyone sees the same hint
+- [ ] Co-op puzzle sequencing — two-phase activation requiring two roles to coordinate per puzzle
+- [ ] Doors and interactive objects — only Floor/Wall tiles; no doors, levers, or interactables
+- [ ] Deepen Blind sound system — only direction arrows + distance labels; needs puzzle hum, door creak, NPC speech lines
+- [ ] Win/loss summary screen — currently just "ALL PUZZLES SOLVED"; needs per-role stats, dominant T/C/I/B, session time
+- [ ] The Archivist NPC — second NPC described in design; not yet spawned
+
+#### Polish
+- [ ] Role assignment system — currently hardcoded in Engine; needs a selection screen
+- [ ] Terminal resize handling — rendering breaks if terminal is resized mid-game
+- [ ] Remove dead Event variants — `EntityDied` and `StateChange` never emitted; clean up or implement
+- [ ] Session logger graceful failure — panics on disk full / read-only fs; should degrade silently
 
 ### Deferred for now
 
 - Roblox prototype / Lua implementation
 - UE5 migration / C++ implementation
-
-### Not started
-
-- Echo Chamber puzzle logic in Rust
-- Role assignment system in Rust
 
 ---
 
