@@ -1,7 +1,5 @@
 # Fractured Perception — Project Briefing
 
-*Paste this as the first message in every new Claude Project chat to restore full context.*
-
 ---
 
 ## What this game is
