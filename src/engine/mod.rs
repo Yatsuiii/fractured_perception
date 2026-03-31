@@ -4,12 +4,14 @@ pub mod time;
 use std::collections::{HashSet, VecDeque};
 
 use crate::{
+    dialogue::{self, DialogueSession},
+    encounter::EncounterMarker,
     events::{Event, EventBus, TrustReason},
     input::{InputState, Key},
-    map::generate_test_map,
     perception::{self, PanelColor, PanelLine},
     player::{Player, Role},
     renderer::{terminal::TerminalRenderer, RenderError, Renderer},
+    stage::{Progression, StageDef, get_stage_def, get_theme, maps},
     state::{GameState, StateManager},
     world::{
         components::{NpcMarker, Position, PuzzleTile},
@@ -39,7 +41,6 @@ impl EventLog {
 
     fn is_empty(&self) -> bool { self.entries.is_empty() }
 
-    /// Keeps the most recent 8 entries; drops the oldest when full.
     fn push(&mut self, text: String, color: PanelColor, elapsed: f32) {
         if self.entries.len() >= 8 {
             self.entries.pop_front();
@@ -48,99 +49,80 @@ impl EventLog {
     }
 }
 
-const MAP_W: usize = 80;
-const MAP_H: usize = 34;
 const FOV_RADIUS: f32 = 8.0;
 
 pub struct Engine {
     time:              Time,
     world:             World,
     players:           [Player; 3],
-    /// Index of the human player — set during role selection.
     human_idx:         usize,
     state:             StateManager,
     events:            EventBus,
     input:             InputState,
     renderer:          TerminalRenderer,
     activated_puzzles:     HashSet<u32>,
-    /// Stores (sequence_id, time.elapsed at activation) for the timed UI flash.
     puzzle_flash:          Option<(u32, f32)>,
-    /// Shared rolling log of team events — visible in every role's side panel.
     event_log:             EventLog,
-    /// Writes every event to a timestamped file in logs/ for post-session review.
     session_logger:        logger::SessionLogger,
-    /// Entities driven by the AI module (currently just the Watcher).
     npc_entities:          Vec<Entity>,
-    /// time.elapsed value when the AI last took a step (NPCs move every 0.5 s).
+    encounter_entities:    Vec<Entity>,
     last_ai_tick:          f32,
-    /// time.elapsed value when AI companions last took a step.
     last_companion_tick:   f32,
+    dialogue_session:      Option<DialogueSession>,
+    /// Linear stage progression.
+    progression:           Progression,
+    /// The role chosen by the human — preserved across stage transitions.
+    chosen_role:           Option<Role>,
 }
 
-// --- World population ---
+// --- Stage-driven world building ---
 
-fn build_world() -> (World, [Entity; 3], Vec<Entity>) {
-    let map = generate_test_map(MAP_W, MAP_H);
+fn build_stage(stage_def: &StageDef) -> (World, [Entity; 3], Vec<Entity>, Vec<Entity>) {
+    let map = maps::generate_stage_map(stage_def.theme.stage_number() - 1);
     let mut world = World::new(map);
 
-    // Players start in the entrance hall (room 0).
-    let e0 = world.spawn(); world.add_position(e0, Position { x: 5.0,  y: 4.0 });
-    let e1 = world.spawn(); world.add_position(e1, Position { x: 6.0,  y: 4.0 });
-    let e2 = world.spawn(); world.add_position(e2, Position { x: 5.0,  y: 5.0 });
+    // Spawn players at the stage's spawn point.
+    let (sx, sy) = stage_def.spawn_position;
+    let e0 = world.spawn(); world.add_position(e0, Position { x: sx,       y: sy });
+    let e1 = world.spawn(); world.add_position(e1, Position { x: sx + 1.0, y: sy });
+    let e2 = world.spawn(); world.add_position(e2, Position { x: sx,       y: sy + 1.0 });
 
-    // --- NPCs — each inhabits a different wing ---
-
-    // The Watcher — cryptic, roams the observation room (room 2).
-    let watcher = world.spawn();
-    world.add_position(watcher, Position { x: 33.0, y: 5.0 });
-    world.add_npc_marker(watcher, NpcMarker { name: "The Watcher", base_trust: 0.6 });
-
-    // The Echo — repeats fragments of truth, lurks in the echo chamber (room 10).
-    let echo = world.spawn();
-    world.add_position(echo, Position { x: 24.0, y: 27.0 });
-    world.add_npc_marker(echo, NpcMarker { name: "The Echo", base_trust: 0.4 });
-
-    // The Keeper — guards the central hall (room 7), slow to trust.
-    let keeper = world.spawn();
-    world.add_position(keeper, Position { x: 38.0, y: 15.0 });
-    world.add_npc_marker(keeper, NpcMarker { name: "The Keeper", base_trust: 0.3 });
-
-    // The Witness — silent observer near the terminus (room 12).
-    let witness = world.spawn();
-    world.add_position(witness, Position { x: 56.0, y: 27.0 });
-    world.add_npc_marker(witness, NpcMarker { name: "The Witness", base_trust: 0.5 });
-
-    // --- Puzzle tiles — scattered across the map ---
-
-    let puzzles: &[(f32, f32, u32)] = &[
-        (18.0,  4.0,  1),  // corridor junction (room 1)
-        (30.0,  5.0,  2),  // observation room (room 2)
-        (62.0,  5.0,  3),  // signal chamber (room 4)
-        (7.0,  14.0,  4),  // storage vault (room 5)
-        (38.0, 18.0,  5),  // central hall (room 7)
-        (24.0, 30.0,  6),  // echo chamber (room 10)
-        (56.0, 30.0,  7),  // terminus (room 12)
-    ];
-
-    for &(px, py, seq) in puzzles {
+    // Spawn NPCs from stage definition.
+    let mut npc_entities = Vec::new();
+    for npc_def in &stage_def.npcs {
         let e = world.spawn();
-        world.add_position(e, Position { x: px, y: py });
-        world.add_puzzle_tile(e, PuzzleTile { sequence_id: seq, is_active: false });
+        world.add_position(e, Position { x: npc_def.x, y: npc_def.y });
+        world.add_npc_marker(e, NpcMarker { name: npc_def.name, base_trust: npc_def.base_trust });
+        npc_entities.push(e);
     }
 
-    let npc_entities = vec![watcher, echo, keeper, witness];
-    (world, [e0, e1, e2], npc_entities)
+    // Spawn encounters from stage definition.
+    let mut encounter_entities = Vec::new();
+    for enc_def in &stage_def.encounters {
+        let e = world.spawn();
+        let (ex, ey) = enc_def.position;
+        world.add_position(e, Position { x: ex, y: ey });
+        world.add_encounter(e, EncounterMarker::from_def(enc_def));
+        encounter_entities.push(e);
+    }
+
+    // Spawn the exit gate as a puzzle tile (sequence_id 0 = gate marker).
+    let gate = world.spawn();
+    let (gx, gy) = stage_def.gate_position;
+    world.add_position(gate, Position { x: gx, y: gy });
+    world.add_puzzle_tile(gate, PuzzleTile { sequence_id: 0, is_active: false });
+
+    (world, [e0, e1, e2], npc_entities, encounter_entities)
 }
 
 // --- Engine ---
 
 impl Engine {
     pub fn new() -> Self {
-        let (world, entities, npc_entities) = build_world();
+        let stage_def = get_stage_def(0);
+        let (world, entities, npc_entities, encounter_entities) = build_stage(&stage_def);
         let (w, h) = (world.map.width, world.map.height);
 
-        // Roles are assigned after the player picks one on the selection screen.
-        // Default all to Blind — reassigned in select_role().
         let mut players = [
             Player::new(entities[0], Role::Blind,          w, h),
             Player::new(entities[1], Role::VisualAnalyst,  w, h),
@@ -165,8 +147,12 @@ impl Engine {
             event_log: EventLog::new(),
             session_logger: logger::SessionLogger::new(),
             npc_entities,
+            encounter_entities,
             last_ai_tick: 0.0,
             last_companion_tick: 0.0,
+            dialogue_session: None,
+            progression: Progression::new(),
+            chosen_role: None,
         }
     }
 
@@ -193,42 +179,79 @@ impl Engine {
 
             self.update();
 
-            // Build the active player's perception view.
-            let player_entities: Vec<Entity> =
-                self.players.iter().map(|p| p.entity).collect();
+            // Render based on current state.
+            match self.state.current() {
+                GameState::StageTransition => {
+                    let theme = get_theme(self.progression.current_stage);
+                    self.renderer.clear()?;
+                    self.renderer.draw_stage_transition(theme)?;
+                }
+                _ => {
+                    let player_entities: Vec<Entity> =
+                        self.players.iter().map(|p| p.entity).collect();
 
-            let mut view = perception::build_view(
-                &self.players[self.human_idx],
-                &player_entities,
-                &self.world,
-            );
+                    let mut view = perception::build_view(
+                        &self.players[self.human_idx],
+                        &player_entities,
+                        &self.world,
+                    );
 
-            // Inject a timed puzzle-activation flash into the side panel (2 s window).
-            if let Some((seq_id, flash_time)) = self.puzzle_flash {
-                if self.time.elapsed - flash_time < 2.0 {
+                    // Inject puzzle flash.
+                    if let Some((seq_id, flash_time)) = self.puzzle_flash {
+                        if self.time.elapsed - flash_time < 2.0 {
+                            view.panel_lines.push(PanelLine { text: String::new(), color: PanelColor::Grey });
+                            view.panel_lines.push(PanelLine {
+                                text: format!("  * PUZZLE #{} ACTIVATED!", seq_id),
+                                color: PanelColor::Green,
+                            });
+                        }
+                    }
+
+                    // Inject stage info into panel.
+                    let theme = get_theme(self.progression.current_stage);
                     view.panel_lines.push(PanelLine { text: String::new(), color: PanelColor::Grey });
                     view.panel_lines.push(PanelLine {
-                        text: format!("  * PUZZLE #{} ACTIVATED!", seq_id),
-                        color: PanelColor::Green,
+                        text: format!("Stage {}: {}", theme.stage_number(), theme.name()),
+                        color: PanelColor::White,
                     });
+
+                    let stage_def = get_stage_def(self.progression.current_stage);
+                    let resolved = self.progression.encounters_resolved;
+                    let total = stage_def.clear_threshold;
+                    view.panel_lines.push(PanelLine {
+                        text: format!("Encounters: {}/{}", resolved, total),
+                        color: if self.progression.gate_open { PanelColor::Green } else { PanelColor::Grey },
+                    });
+
+                    if self.progression.gate_open {
+                        view.panel_lines.push(PanelLine {
+                            text: "  GATE OPEN — find the exit!".into(),
+                            color: PanelColor::Green,
+                        });
+                    }
+
+                    // Inject team event log.
+                    if !self.event_log.is_empty() {
+                        view.panel_lines.push(PanelLine { text: String::new(), color: PanelColor::Grey });
+                        view.panel_lines.push(PanelLine { text: "─ TEAM LOG ─".into(), color: PanelColor::DarkGrey });
+                        for entry in &self.event_log.entries {
+                            let age = self.time.elapsed - entry.elapsed;
+                            let color = if age < 4.0 { entry.color } else { PanelColor::DarkGrey };
+                            view.panel_lines.push(PanelLine { text: entry.text.clone(), color });
+                        }
+                    }
+
+                    self.renderer.clear()?;
+                    self.renderer.draw_view(self.state.current(), &view)?;
+
+                    if *self.state.current() == GameState::Dialogue {
+                        if let Some(ref session) = self.dialogue_session {
+                            self.renderer.draw_dialogue_overlay(session)?;
+                        }
+                    }
                 }
             }
 
-            // Inject the shared team event log below the role-specific content.
-            if !self.event_log.is_empty() {
-                view.panel_lines.push(PanelLine { text: String::new(),        color: PanelColor::Grey    });
-                view.panel_lines.push(PanelLine { text: "─ TEAM LOG ─".into(), color: PanelColor::DarkGrey });
-                for entry in &self.event_log.entries {
-                    let age = self.time.elapsed - entry.elapsed;
-                    let color = if age < 4.0 { entry.color } else { PanelColor::DarkGrey };
-                    view.panel_lines.push(PanelLine { text: entry.text.clone(), color });
-                }
-            }
-
-            self.renderer.clear()?;
-            self.renderer.draw_view(self.state.current(), &view)?;
-
-            // Sleep only the remaining time so computation costs don't accumulate.
             let spent = frame_start.elapsed();
             if spent < FRAME_TARGET {
                 std::thread::sleep(FRAME_TARGET - spent);
@@ -265,10 +288,21 @@ impl Engine {
                     self.state.transition(GameState::Paused);
                 } else {
                     if self.input.is_pressed(&Key::E) {
-                        let role = self.players[self.human_idx].role;
-                        self.events.emit(Event::Ping { from_role: role });
+                        // Priority: NPC dialogue > encounter interaction > ping
+                        if !self.try_start_dialogue() && !self.try_interact_encounter() {
+                            let role = self.players[self.human_idx].role;
+                            self.events.emit(Event::Ping { from_role: role });
+                        }
                     }
                     self.handle_movement();
+                }
+            }
+            GameState::Dialogue => {
+                self.handle_dialogue_input();
+            }
+            GameState::StageTransition => {
+                if self.input.is_pressed(&Key::Enter) {
+                    self.state.transition(GameState::Playing);
                 }
             }
             GameState::Paused => {
@@ -287,7 +321,6 @@ impl Engine {
         false
     }
 
-    /// Assigns the chosen role to the human player. The other two get the remaining roles.
     fn select_role(&mut self, chosen: Role) {
         let all_roles = [Role::Blind, Role::VisualAnalyst, Role::Hallucinating];
         let remaining: Vec<Role> = all_roles.iter().copied().filter(|r| *r != chosen).collect();
@@ -296,14 +329,15 @@ impl Engine {
         self.players[1].role = remaining[0];
         self.players[2].role = remaining[1];
         self.human_idx = 0;
+        self.chosen_role = Some(chosen);
 
         let text = format!("  Role selected: {}", chosen.name());
         self.session_logger.log(&text);
 
-        self.state.transition(GameState::Playing);
+        // Show stage transition screen before starting.
+        self.state.transition(GameState::StageTransition);
     }
 
-    /// Moves the active player one tile per key press (turn-based feel).
     fn handle_movement(&mut self) {
         let mut dx = 0_i32;
         let mut dy = 0_i32;
@@ -325,11 +359,7 @@ impl Engine {
             None => return,
         };
 
-        // Movement is always against the *true* map — not the perceived one.
-        // This means the Analyst can walk into fabricated walls (invisible barrier)
-        // and the Hallucinating can walk through walls that visually look solid.
         if !self.world.map.is_walkable(nx, ny) {
-            // Walking into a wall the Analyst thought was a floor = illusion point.
             if self.players[self.human_idx].role == Role::VisualAnalyst {
                 self.players[self.human_idx].hidden_state.add_illusion(0.05);
             }
@@ -343,18 +373,26 @@ impl Engine {
 
         self.events.emit(Event::PlayerMoved { entity, x: nx as f32, y: ny as f32 });
 
+        // Check for puzzle tile activation.
         if let Some((_puzzle_entity, puzzle_tile)) = self.world.puzzle_tile_at_mut(nx, ny) {
             if !puzzle_tile.is_active {
                 let seq_id = puzzle_tile.sequence_id;
-                puzzle_tile.is_active = true;
-                self.events.emit(Event::PuzzleActivated { sequence_id: seq_id });
-                self.players[self.human_idx].hidden_state.add_truth(0.05);
+
+                // seq_id 0 = exit gate. Only activate if gate is open.
+                if seq_id == 0 && self.progression.gate_open {
+                    puzzle_tile.is_active = true;
+                    self.advance_stage();
+                    return;
+                } else if seq_id > 0 {
+                    puzzle_tile.is_active = true;
+                    self.events.emit(Event::PuzzleActivated { sequence_id: seq_id });
+                    self.players[self.human_idx].hidden_state.add_truth(0.05);
+                }
             }
         }
 
         self.world.compute_fov_into(entity, FOV_RADIUS, &mut self.players[self.human_idx].fov);
 
-        // Walking through a tile the Hallucinating thought was a wall = balance point.
         if self.players[self.human_idx].role == Role::Hallucinating {
             let was_distorted = crate::perception::is_distorted(
                 self.world.map.seed,
@@ -369,10 +407,157 @@ impl Engine {
         self.players[self.human_idx].hidden_state.add_truth(0.01);
     }
 
+    /// Try to interact with a nearby encounter. Returns true if interaction happened.
+    fn try_interact_encounter(&mut self) -> bool {
+        let player_pos = match self.world.get_position(self.players[self.human_idx].entity) {
+            Some(p) => *p,
+            None => return false,
+        };
+
+        // Find closest active encounter within 2 tiles.
+        let mut closest: Option<(Entity, f32)> = None;
+        for &enc in &self.encounter_entities {
+            let enc_pos = match self.world.get_position(enc) {
+                Some(p) => *p,
+                None => continue,
+            };
+            let enc_marker = match self.world.get_encounter(enc) {
+                Some(m) => m,
+                None => continue,
+            };
+            if !enc_marker.is_active() { continue; }
+
+            let dx = player_pos.x - enc_pos.x;
+            let dy = player_pos.y - enc_pos.y;
+            let dist2 = dx * dx + dy * dy;
+
+            if dist2 <= 4.0 {
+                if closest.is_none() || dist2 < closest.unwrap().1 {
+                    closest = Some((enc, dist2));
+                }
+            }
+        }
+
+        let (enc_entity, _) = match closest {
+            Some(c) => c,
+            None => return false,
+        };
+
+        // Resolve the encounter.
+        let (enc_name, enc_kind, role_text) = {
+            let marker = self.world.get_encounter(enc_entity).unwrap();
+            let role = self.players[self.human_idx].role;
+            (marker.name, marker.kind, marker.text_for_role(role))
+        };
+
+        // Log what the player's role perceives.
+        self.event_log.push(
+            format!("  [{}] {}", enc_kind.label(), enc_name),
+            PanelColor::Yellow,
+            self.time.elapsed,
+        );
+        self.event_log.push(
+            format!("  {}", truncate_text(role_text, 24)),
+            PanelColor::Grey,
+            self.time.elapsed,
+        );
+        self.session_logger.log(&format!("  Encounter: {} ({})", enc_name, enc_kind.label()));
+
+        // Mark as resolved.
+        if let Some(marker) = self.world.get_encounter_mut(enc_entity) {
+            marker.resolve();
+        }
+
+        self.events.emit(Event::EncounterResolved { entity: enc_entity });
+
+        // Give stat rewards based on encounter type.
+        let hs = &mut self.players[self.human_idx].hidden_state;
+        match enc_kind {
+            crate::encounter::EncounterKind::Puzzle   => { hs.add_truth(0.08); }
+            crate::encounter::EncounterKind::Enemy    => { hs.add_chaos(0.05); hs.add_balance(0.03); }
+            crate::encounter::EncounterKind::Obstacle => { hs.add_balance(0.05); hs.add_truth(0.03); }
+        }
+
+        // Check if gate should open.
+        let stage_def = get_stage_def(self.progression.current_stage);
+        let gate_just_opened = self.progression.resolve_encounter(stage_def.clear_threshold);
+        if gate_just_opened {
+            self.event_log.push(
+                "  >>> GATE OPENED <<<".into(),
+                PanelColor::Green,
+                self.time.elapsed,
+            );
+            self.session_logger.log("  Gate opened!");
+        }
+
+        // Trust boost from resolving encounters.
+        for &npc in &self.npc_entities {
+            let base = self.world.get_npc_marker(npc)
+                .map(|m| m.base_trust)
+                .unwrap_or(0.5);
+            self.players[self.human_idx].adjust_trust(npc, 0.08, base);
+        }
+
+        true
+    }
+
+    /// Advance to the next stage, or end the game if all stages are complete.
+    fn advance_stage(&mut self) {
+        let theme = get_theme(self.progression.current_stage);
+        self.session_logger.log(&format!("  Stage cleared: {}", theme.name()));
+
+        if self.progression.is_final_stage() {
+            self.state.transition(GameState::GameOver);
+            return;
+        }
+
+        self.progression.advance();
+        self.load_current_stage();
+        self.state.transition(GameState::StageTransition);
+    }
+
+    /// Loads the current stage into the world, preserving the player's role and hidden state.
+    fn load_current_stage(&mut self) {
+        let stage_def = get_stage_def(self.progression.current_stage);
+        let (world, entities, npc_entities, encounter_entities) = build_stage(&stage_def);
+        let (w, h) = (world.map.width, world.map.height);
+
+        // Preserve hidden state and role across stage transitions.
+        let hidden_states: Vec<_> = self.players.iter().map(|p| p.hidden_state.clone()).collect();
+        let roles: Vec<_> = self.players.iter().map(|p| p.role).collect();
+
+        let mut players = [
+            Player::new(entities[0], roles[0], w, h),
+            Player::new(entities[1], roles[1], w, h),
+            Player::new(entities[2], roles[2], w, h),
+        ];
+
+        players[0].hidden_state = hidden_states[0].clone();
+        players[1].hidden_state = hidden_states[1].clone();
+        players[2].hidden_state = hidden_states[2].clone();
+
+        for player in &mut players {
+            world.compute_fov_into(player.entity, FOV_RADIUS, &mut player.fov);
+        }
+
+        self.world = world;
+        self.players = players;
+        self.npc_entities = npc_entities;
+        self.encounter_entities = encounter_entities;
+        self.activated_puzzles.clear();
+        self.puzzle_flash = None;
+        self.event_log.clear();
+        self.last_ai_tick = 0.0;
+        self.last_companion_tick = 0.0;
+        self.dialogue_session = None;
+
+        let theme = get_theme(self.progression.current_stage);
+        self.session_logger.log(&format!("  Entering: {}", theme.name()));
+    }
+
     fn update(&mut self) {
         self.state.apply_pending();
 
-        // Step NPC AI at 0.5 s intervals — one move per tick, no per-frame jitter.
         if self.time.elapsed - self.last_ai_tick >= 0.5 {
             self.last_ai_tick = self.time.elapsed;
             let player_entities: Vec<Entity> = self.players.iter().map(|p| p.entity).collect();
@@ -395,7 +580,6 @@ impl Engine {
                 }
             }
 
-            // Proximity trust: being near an NPC each tick nudges trust.
             for &npc in &self.npc_entities {
                 let npc_pos = match self.world.get_position(npc) {
                     Some(p) => *p,
@@ -411,7 +595,6 @@ impl Engine {
                     let dy = p.y - npc_pos.y;
                     let dist2 = dx * dx + dy * dy;
 
-                    // Within 3 tiles: small trust gain. Within 6: smaller gain.
                     let delta = if dist2 <= 9.0 {
                         0.02
                     } else if dist2 <= 36.0 {
@@ -432,7 +615,6 @@ impl Engine {
             }
         }
 
-        // AI companions follow the human player loosely (every 0.8 s).
         if self.time.elapsed - self.last_companion_tick >= 0.8 {
             self.last_companion_tick = self.time.elapsed;
             let human_entity = self.players[self.human_idx].entity;
@@ -448,7 +630,6 @@ impl Engine {
                     let dy = target.y as i32 - cy;
                     let dist2 = dx * dx + dy * dy;
 
-                    // Stay 2–3 tiles away — don't crowd the human.
                     if dist2 <= 4 { continue; }
 
                     let (mx, my) = if dx.abs() >= dy.abs() {
@@ -472,28 +653,14 @@ impl Engine {
 
         for event in self.events.drain() {
             match event {
-                Event::PlayerMoved { entity: _entity, x: _x, y: _y } => {
-                    // Movement events can drive future systems like footsteps, AI, or sound.
-                }
+                Event::PlayerMoved { .. } => {}
                 Event::PuzzleActivated { sequence_id } => {
                     if self.activated_puzzles.insert(sequence_id) {
                         self.puzzle_flash = Some((sequence_id, self.time.elapsed));
                         let role = self.players[self.human_idx].role;
-                        let text = format!("  {} → Puzzle #{} \u{2713}", role.name(), sequence_id);
+                        let text = format!("  {} → Puzzle #{} ✓", role.name(), sequence_id);
                         self.session_logger.log(&text);
                         self.event_log.push(text, PanelColor::Green, self.time.elapsed);
-
-                        // Solving puzzles builds NPC trust — cooperative action.
-                        for &npc in &self.npc_entities {
-                            let base = self.world.get_npc_marker(npc)
-                                .map(|m| m.base_trust)
-                                .unwrap_or(0.5);
-                            self.players[self.human_idx].adjust_trust(npc, 0.1, base);
-                        }
-
-                        if self.activated_puzzles.len() >= 7 {
-                            self.state.transition(GameState::GameOver);
-                        }
                     }
                 }
                 Event::Ping { from_role } => {
@@ -501,7 +668,6 @@ impl Engine {
                     self.session_logger.log(&text);
                     self.event_log.push(text, PanelColor::Cyan, self.time.elapsed);
 
-                    // Pinging near an NPC draws attention — slight trust shift.
                     let human = self.players[self.human_idx].entity;
                     if let Some(hp) = self.world.get_position(human).copied() {
                         for &npc in &self.npc_entities {
@@ -520,19 +686,155 @@ impl Engine {
                         }
                     }
                 }
-                Event::TrustChanged { npc: _, delta, reason } => {
+                Event::TrustChanged { delta, reason, .. } => {
                     let dir = if delta > 0.0 { "+" } else { "" };
                     let text = format!("  Trust {}{:.2} ({:?})", dir, delta, reason);
                     self.session_logger.log(&text);
                     self.event_log.push(text, PanelColor::Yellow, self.time.elapsed);
                 }
+                Event::DialogueStarted { npc } => {
+                    let name = self.world.get_npc_marker(npc)
+                        .map(|m| m.name)
+                        .unwrap_or("???");
+                    self.session_logger.log(&format!("  >> Dialogue: {}", name));
+                }
+                Event::DialogueEnded { npc } => {
+                    let name = self.world.get_npc_marker(npc)
+                        .map(|m| m.name)
+                        .unwrap_or("???");
+                    self.session_logger.log(&format!("  << Dialogue end: {}", name));
+                }
+                Event::EncounterResolved { .. } => {}
                 _ => {}
             }
         }
     }
 
+    fn try_start_dialogue(&mut self) -> bool {
+        let player = &self.players[self.human_idx];
+        let player_pos = match self.world.get_position(player.entity) {
+            Some(p) => *p,
+            None => return false,
+        };
+
+        let mut closest: Option<(Entity, f32)> = None;
+        for &npc in &self.npc_entities {
+            let npc_pos = match self.world.get_position(npc) {
+                Some(p) => *p,
+                None => continue,
+            };
+            let dx = player_pos.x - npc_pos.x;
+            let dy = player_pos.y - npc_pos.y;
+            let dist2 = dx * dx + dy * dy;
+
+            if dist2 <= 4.0 {
+                if closest.is_none() || dist2 < closest.unwrap().1 {
+                    closest = Some((npc, dist2));
+                }
+            }
+        }
+
+        let (npc_entity, _) = match closest {
+            Some(c) => c,
+            None => return false,
+        };
+
+        let npc_name = match self.world.get_npc_marker(npc_entity) {
+            Some(m) => m.name,
+            None => return false,
+        };
+
+        let role = self.players[self.human_idx].role;
+        let base_trust = self.world.get_npc_marker(npc_entity)
+            .map(|m| m.base_trust)
+            .unwrap_or(0.5);
+        let trust = self.players[self.human_idx].trust_for(npc_entity, base_trust);
+
+        let lines = match dialogue::get_dialogue(npc_name, role, trust) {
+            Some(l) => l,
+            None => return false,
+        };
+
+        self.dialogue_session = Some(DialogueSession {
+            npc_entity,
+            npc_name,
+            lines,
+            current_line: 0,
+        });
+
+        self.events.emit(Event::DialogueStarted { npc: npc_entity });
+        self.session_logger.log(&format!("  Dialogue started: {}", npc_name));
+        self.state.transition(GameState::Dialogue);
+        true
+    }
+
+    fn handle_dialogue_input(&mut self) {
+        if self.input.is_pressed(&Key::Escape) {
+            self.end_dialogue();
+            return;
+        }
+
+        if self.input.is_pressed(&Key::E) || self.input.is_pressed(&Key::Enter) {
+            self.apply_current_dialogue_line();
+
+            let finished = match self.dialogue_session.as_mut() {
+                Some(session) => !session.advance(),
+                None => true,
+            };
+
+            if finished {
+                self.end_dialogue();
+            }
+        }
+    }
+
+    fn apply_current_dialogue_line(&mut self) {
+        let (npc_entity, trust_delta, stat_nudge) = match &self.dialogue_session {
+            Some(session) => match session.current() {
+                Some(line) => (session.npc_entity, line.trust_delta, line.stat_nudge),
+                None => return,
+            },
+            None => return,
+        };
+
+        if trust_delta.abs() > f32::EPSILON {
+            let base = self.world.get_npc_marker(npc_entity)
+                .map(|m| m.base_trust)
+                .unwrap_or(0.5);
+            self.players[self.human_idx].adjust_trust(npc_entity, trust_delta, base);
+            self.events.emit(Event::TrustChanged {
+                npc: npc_entity,
+                delta: trust_delta,
+                reason: TrustReason::Dialogue,
+            });
+        }
+
+        let hs = &mut self.players[self.human_idx].hidden_state;
+        let (truth, chaos, illusion, balance) = stat_nudge;
+        if truth > 0.0    { hs.add_truth(truth); }
+        if chaos > 0.0    { hs.add_chaos(chaos); }
+        if illusion > 0.0  { hs.add_illusion(illusion); }
+        if balance > 0.0   { hs.add_balance(balance); }
+    }
+
+    fn end_dialogue(&mut self) {
+        if let Some(session) = self.dialogue_session.take() {
+            let npc_name = session.npc_name;
+            self.events.emit(Event::DialogueEnded { npc: session.npc_entity });
+            self.session_logger.log(&format!("  Dialogue ended: {}", npc_name));
+            self.event_log.push(
+                format!("  Spoke with {}", npc_name),
+                PanelColor::Cyan,
+                self.time.elapsed,
+            );
+        }
+        self.state.transition(GameState::Playing);
+    }
+
     fn reset(&mut self) {
-        let (world, entities, npc_entities) = build_world();
+        self.progression = Progression::new();
+        let stage_def = get_stage_def(0);
+        let (world, entities, npc_entities, encounter_entities) = build_stage(&stage_def);
         let (w, h) = (world.map.width, world.map.height);
 
         let mut players = [
@@ -548,12 +850,24 @@ impl Engine {
         self.world = world;
         self.players = players;
         self.npc_entities = npc_entities;
+        self.encounter_entities = encounter_entities;
         self.human_idx = 0;
         self.activated_puzzles.clear();
         self.puzzle_flash = None;
         self.event_log.clear();
         self.last_ai_tick = 0.0;
         self.last_companion_tick = 0.0;
+        self.dialogue_session = None;
+        self.chosen_role = None;
         self.session_logger.log("--- NEW GAME ---");
+    }
+}
+
+/// Truncates text to fit in the side panel.
+fn truncate_text(text: &str, max_len: usize) -> String {
+    if text.len() <= max_len {
+        text.to_string()
+    } else {
+        format!("{}...", &text[..max_len - 3])
     }
 }

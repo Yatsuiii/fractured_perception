@@ -8,7 +8,9 @@ use crossterm::{
 };
 
 use crate::{
+    dialogue::DialogueSession,
     perception::{CellColor, EntityColor, PanelColor, PlayerView},
+    stage::StageTheme,
     state::GameState,
 };
 
@@ -56,7 +58,9 @@ impl Renderer for TerminalRenderer {
             GameState::RoleSelect => self.draw_role_select()?,
             GameState::Playing    => self.draw_playing(view)?,
             GameState::Paused     => { self.draw_playing(view)?; self.draw_pause_overlay()?; }
-            GameState::GameOver   => self.draw_game_over()?,
+            GameState::Dialogue        => self.draw_playing(view)?,
+            GameState::StageTransition => {}, // drawn separately via draw_stage_transition
+            GameState::GameOver        => self.draw_game_over()?,
         }
         self.stdout.flush()?;
         Ok(())
@@ -236,6 +240,154 @@ impl TerminalRenderer {
         )?;
         Ok(())
     }
+
+    /// Draws the stage transition screen — shown between stages.
+    pub fn draw_stage_transition(&mut self, theme: StageTheme) -> Result<(), RenderError> {
+        let stage_num = format!("STAGE {}", theme.stage_number());
+        let name = theme.name();
+        let desc = theme.description();
+
+        queue!(
+            self.stdout,
+            cursor::MoveTo(0, 0),
+            terminal::Clear(ClearType::All),
+        )?;
+
+        queue!(
+            self.stdout,
+            cursor::MoveTo(30, 8),
+            SetForegroundColor(Color::DarkGrey),
+            Print(&stage_num),
+            cursor::MoveTo(2, 11),
+            SetForegroundColor(Color::White),
+            Print("╔══════════════════════════════════════════════════════════════╗"),
+            cursor::MoveTo(2, 12),
+        )?;
+
+        // Center the name inside the box.
+        let pad = (60_i32 - name.len() as i32) / 2;
+        let padded_name = format!("║{:>w$}{}{:<r$}║", "", name, "", w = pad as usize, r = (60 - pad as usize - name.len()));
+        queue!(
+            self.stdout,
+            Print(&padded_name),
+            cursor::MoveTo(2, 13),
+            SetForegroundColor(Color::White),
+            Print("╚══════════════════════════════════════════════════════════════╝"),
+        )?;
+
+        // Description.
+        let desc_pad = (64_i32 - desc.len() as i32) / 2;
+        queue!(
+            self.stdout,
+            cursor::MoveTo(desc_pad.max(2) as u16, 16),
+            SetForegroundColor(Color::DarkGrey),
+            Print(desc),
+        )?;
+
+        queue!(
+            self.stdout,
+            cursor::MoveTo(22, 22),
+            SetForegroundColor(Color::DarkGrey),
+            Print("[Enter] Begin          [Q] Quit"),
+            ResetColor,
+        )?;
+
+        self.stdout.flush()?;
+        Ok(())
+    }
+
+    /// Draws a dialogue box overlay at the bottom of the map area.
+    /// Shows the NPC name, current line of dialogue, and navigation hints.
+    pub fn draw_dialogue_overlay(&mut self, session: &DialogueSession) -> Result<(), RenderError> {
+        // Dialogue box dimensions and position.
+        let box_width: u16 = 60;
+        let box_left: u16 = 2;
+        let box_top: u16 = 26; // near the bottom of the 34-row map
+
+        // Build the content lines.
+        let npc_label = format!("  {} says:", session.npc_name);
+
+        let dialogue_text = match session.current() {
+            Some(line) => line.text,
+            None => "...",
+        };
+
+        // Word-wrap the dialogue text to fit inside the box.
+        let inner_width = (box_width - 4) as usize;
+        let wrapped = word_wrap(dialogue_text, inner_width);
+
+        let is_last = session.current_line + 1 >= session.lines.len();
+        let hint = if is_last {
+            "[E/Enter] Close    [Esc] Leave"
+        } else {
+            "[E/Enter] Continue    [Esc] Leave"
+        };
+
+        // Calculate box height: top border + name + blank + wrapped lines + blank + hint + bottom border.
+        // Draw the box border and content.
+        let top_border = format!("┌{}┐", "─".repeat(box_width as usize - 2));
+        let bot_border = format!("└{}┘", "─".repeat(box_width as usize - 2));
+        let empty_line = format!("│{}│", " ".repeat(box_width as usize - 2));
+
+        // Top border.
+        queue!(
+            self.stdout,
+            cursor::MoveTo(box_left, box_top),
+            SetForegroundColor(Color::White),
+            Print(&top_border),
+        )?;
+
+        // NPC name line.
+        let name_padded = format!("│{:<width$}│", npc_label, width = box_width as usize - 2);
+        queue!(
+            self.stdout,
+            cursor::MoveTo(box_left, box_top + 1),
+            SetForegroundColor(Color::Green),
+            Print(&name_padded),
+        )?;
+
+        // Blank separator.
+        queue!(
+            self.stdout,
+            cursor::MoveTo(box_left, box_top + 2),
+            SetForegroundColor(Color::White),
+            Print(&empty_line),
+        )?;
+
+        // Dialogue text lines.
+        for (i, text_line) in wrapped.iter().enumerate() {
+            let padded = format!("│  {:<width$}│", text_line, width = box_width as usize - 4);
+            queue!(
+                self.stdout,
+                cursor::MoveTo(box_left, box_top + 3 + i as u16),
+                SetForegroundColor(Color::White),
+                Print(&padded),
+            )?;
+        }
+
+        // Hint line.
+        let hint_row = box_top + 3 + wrapped.len() as u16;
+        let hint_padded = format!("│  {:<width$}│", hint, width = box_width as usize - 4);
+        queue!(
+            self.stdout,
+            cursor::MoveTo(box_left, hint_row),
+            SetForegroundColor(Color::DarkGrey),
+            Print(&hint_padded),
+        )?;
+
+        // Bottom border.
+        queue!(
+            self.stdout,
+            cursor::MoveTo(box_left, hint_row + 1),
+            SetForegroundColor(Color::White),
+            Print(&bot_border),
+            ResetColor,
+        )?;
+
+        // Extra flush for the overlay.
+        self.stdout.flush()?;
+        Ok(())
+    }
 }
 
 // --- Color mapping ---
@@ -285,4 +437,32 @@ fn role_color(role: crate::player::Role) -> Color {
         Role::VisualAnalyst => Color::Cyan,
         Role::Hallucinating => Color::DarkYellow,
     }
+}
+
+/// Wraps text at word boundaries to fit within the given width.
+fn word_wrap(text: &str, max_width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut current = String::new();
+
+    for word in text.split_whitespace() {
+        if current.is_empty() {
+            current.push_str(word);
+        } else if current.len() + 1 + word.len() > max_width {
+            lines.push(current);
+            current = word.to_string();
+        } else {
+            current.push(' ');
+            current.push_str(word);
+        }
+    }
+
+    if !current.is_empty() {
+        lines.push(current);
+    }
+
+    if lines.is_empty() {
+        lines.push(String::from("..."));
+    }
+
+    lines
 }

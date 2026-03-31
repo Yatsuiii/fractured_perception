@@ -6,13 +6,14 @@ use std::collections::HashMap;
 use components::{NpcMarker, Position, PuzzleTile};
 use entity::Entity;
 
-use crate::{fov::Fov, map::Map};
+use crate::{encounter::EncounterMarker, fov::Fov, map::Map};
 
 pub struct World {
     next_id: u32,
     positions: HashMap<Entity, Position>,
     npc_markers: HashMap<Entity, NpcMarker>,
     puzzle_tiles: HashMap<Entity, PuzzleTile>,
+    encounter_markers: HashMap<Entity, EncounterMarker>,
     pub map: Map,
 }
 
@@ -23,6 +24,7 @@ impl World {
             positions: HashMap::new(),
             npc_markers: HashMap::new(),
             puzzle_tiles: HashMap::new(),
+            encounter_markers: HashMap::new(),
             map,
         }
     }
@@ -39,6 +41,7 @@ impl World {
         self.positions.remove(&entity);
         self.npc_markers.remove(&entity);
         self.puzzle_tiles.remove(&entity);
+        self.encounter_markers.remove(&entity);
     }
 
     // --- Component setters ---
@@ -55,6 +58,10 @@ impl World {
         self.puzzle_tiles.insert(entity, tile);
     }
 
+    pub fn add_encounter(&mut self, entity: Entity, marker: EncounterMarker) {
+        self.encounter_markers.insert(entity, marker);
+    }
+
     // --- Component getters ---
 
     pub fn get_position(&self, entity: Entity) -> Option<&Position> {
@@ -67,6 +74,14 @@ impl World {
 
     pub fn get_npc_marker(&self, entity: Entity) -> Option<&NpcMarker> {
         self.npc_markers.get(&entity)
+    }
+
+    pub fn get_encounter(&self, entity: Entity) -> Option<&EncounterMarker> {
+        self.encounter_markers.get(&entity)
+    }
+
+    pub fn get_encounter_mut(&mut self, entity: Entity) -> Option<&mut EncounterMarker> {
+        self.encounter_markers.get_mut(&entity)
     }
 
     // --- Iterators ---
@@ -84,6 +99,28 @@ impl World {
     pub fn all_puzzle_tiles(&self) -> impl Iterator<Item = (Entity, &Position, &PuzzleTile)> {
         self.puzzle_tiles.iter().filter_map(|(e, t)| {
             self.positions.get(e).map(|p| (*e, p, t))
+        })
+    }
+
+    pub fn all_encounters(&self) -> impl Iterator<Item = (Entity, &Position, &EncounterMarker)> {
+        self.encounter_markers.iter().filter_map(|(e, m)| {
+            self.positions.get(e).map(|p| (*e, p, m))
+        })
+    }
+
+    pub fn encounter_at(&self, x: i32, y: i32) -> Option<(Entity, &EncounterMarker)> {
+        self.encounter_markers.iter().find_map(|(e, marker)| {
+            self.positions.get(e)
+                .filter(|pos| pos.x as i32 == x && pos.y as i32 == y)
+                .map(|_| (*e, marker))
+        })
+    }
+
+    pub fn encounter_at_mut(&mut self, x: i32, y: i32) -> Option<(Entity, &mut EncounterMarker)> {
+        self.encounter_markers.iter_mut().find_map(|(e, marker)| {
+            self.positions.get(e)
+                .filter(|pos| pos.x as i32 == x && pos.y as i32 == y)
+                .map(|_| (*e, marker))
         })
     }
 

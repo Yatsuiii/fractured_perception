@@ -6,6 +6,8 @@ pub enum GameState {
     RoleSelect,
     Playing,
     Paused,
+    Dialogue,
+    StageTransition,
     GameOver,
 }
 

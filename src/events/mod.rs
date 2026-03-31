@@ -7,6 +7,9 @@ pub enum Event {
     StateChange { to: GameState },
     Ping { from_role: Role },
     TrustChanged { npc: Entity, delta: f32, reason: TrustReason },
+    DialogueStarted { npc: Entity },
+    DialogueEnded { npc: Entity },
+    EncounterResolved { entity: Entity },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -14,6 +17,7 @@ pub enum TrustReason {
     PuzzleSolved,
     NpcProximity,
     PingNearby,
+    Dialogue,
 }
 
 pub struct EventBus {

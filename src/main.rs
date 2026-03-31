@@ -1,4 +1,6 @@
 mod ai;
+mod dialogue;
+mod encounter;
 mod engine;
 mod events;
 mod fov;
@@ -7,6 +9,7 @@ mod map;
 mod perception;
 mod player;
 mod renderer;
+mod stage;
 mod state;
 mod world;
 
