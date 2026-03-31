@@ -1,4 +1,8 @@
+pub mod thresholds;
+
 use crate::{player::Role, state::GameState, world::entity::Entity};
+
+use thresholds::Threshold;
 
 pub enum Event {
     PlayerMoved { entity: Entity, x: f32, y: f32 },
@@ -10,6 +14,7 @@ pub enum Event {
     DialogueStarted { npc: Entity },
     DialogueEnded { npc: Entity },
     EncounterResolved { entity: Entity },
+    ThresholdCrossed { threshold: Threshold },
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -45,7 +45,7 @@ impl EncounterKind {
 #[derive(Clone)]
 pub struct RolePerception {
     pub blind: &'static str,
-    pub analyst: &'static str,
+    pub delayed: &'static str,
     pub hallucinating: &'static str,
 }
 
@@ -81,7 +81,7 @@ pub struct EncounterMarker {
 #[derive(Clone)]
 pub struct EncounterPerception {
     pub blind: &'static str,
-    pub analyst: &'static str,
+    pub delayed: &'static str,
     pub hallucinating: &'static str,
 }
 
@@ -93,7 +93,7 @@ impl EncounterMarker {
             state: EncounterState::Active,
             perception: EncounterPerception {
                 blind: def.perception.blind,
-                analyst: def.perception.analyst,
+                delayed: def.perception.delayed,
                 hallucinating: def.perception.hallucinating,
             },
         }
@@ -111,7 +111,7 @@ impl EncounterMarker {
     pub fn text_for_role(&self, role: crate::player::Role) -> &'static str {
         match role {
             crate::player::Role::Blind         => self.perception.blind,
-            crate::player::Role::VisualAnalyst => self.perception.analyst,
+            crate::player::Role::Delayed       => self.perception.delayed,
             crate::player::Role::Hallucinating => self.perception.hallucinating,
         }
     }

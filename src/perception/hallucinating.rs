@@ -5,11 +5,11 @@ use crate::{
 };
 
 use super::{
-    append_puzzle_progress, cell_from_tile, ghost_offset, hidden_cell, is_distorted,
+    append_puzzle_progress, cell_from_tile, ghost_offset, hidden_cell, is_distorted, is_distorted_wide,
     CellColor, EntityColor, PanelColor, PanelLine, PerceivedCell, PerceivedEntity, PlayerView,
 };
 
-pub fn build(player: &Player, player_entities: &[Entity], world: &World) -> PlayerView {
+pub fn build(player: &Player, player_entities: &[Entity], world: &World, double_distortion: bool) -> PlayerView {
     let w = world.map.width;
     let h = world.map.height;
     let seed = world.map.seed;
@@ -23,7 +23,11 @@ pub fn build(player: &Player, player_entities: &[Entity], world: &World) -> Play
             let true_tile = world.map.get(x, y);
 
             if visible {
-                let distorted = is_distorted(seed, x, y);
+                let distorted = if double_distortion {
+                    is_distorted_wide(seed, x, y)
+                } else {
+                    is_distorted(seed, x, y)
+                };
                 if distorted {
                     // Flip floor ↔ wall visually. Navigation uses the true map.
                     // Doors shimmer — they look like walls when distorted.
@@ -105,7 +109,11 @@ pub fn build(player: &Player, player_entities: &[Entity], world: &World) -> Play
         .count()
         .max(1);
     let distorted_count = (0..h).flat_map(|y| (0..w).map(move |x| (x, y)))
-        .filter(|&(x, y)| player.fov.is_visible(x, y) && is_distorted(seed, x, y))
+        .filter(|&(x, y)| player.fov.is_visible(x, y) && if double_distortion {
+            is_distorted_wide(seed, x, y)
+        } else {
+            is_distorted(seed, x, y)
+        })
         .count();
     let stability = 1.0 - (distorted_count as f32 / visible_count as f32);
 

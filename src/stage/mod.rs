@@ -175,7 +175,7 @@ fn stage_shattered_halls() -> StageDef {
                 position: (18.0, 4.0),
                 perception: RolePerception {
                     blind: "A rhythmic tapping echoes from the tiles. The pattern is incomplete.",
-                    analyst: "Tiles glow faintly in sequence. Some tiles flicker — real or fabricated?",
+                    delayed: "Tiles glow in sequence — but you see the pattern from seconds ago. It's already changed.",
                     hallucinating: "Two sequences pulse at once. Only one leads forward.",
                 },
             },
@@ -185,7 +185,7 @@ fn stage_shattered_halls() -> StageDef {
                 position: (35.0, 12.0),
                 perception: RolePerception {
                     blind: "Rubble blocks the path. You hear wind through a gap on the left.",
-                    analyst: "The archway is collapsed. A side passage exists — but is it real?",
+                    delayed: "The archway looks intact to you. But it collapsed seconds ago — the rubble hasn't caught up.",
                     hallucinating: "The archway rebuilds and collapses repeatedly. One frame shows the way.",
                 },
             },
@@ -195,7 +195,7 @@ fn stage_shattered_halls() -> StageDef {
                 position: (50.0, 18.0),
                 perception: RolePerception {
                     blind: "Something scrapes across the floor. It moves when you move.",
-                    analyst: "A jagged shape stalks the corridor. Its edges don't match the walls.",
+                    delayed: "A jagged shape stands still in the corridor. But that's where it was — not where it is.",
                     hallucinating: "Three shapes circle you. Two are echoes. One is hunting.",
                 },
             },
@@ -205,7 +205,7 @@ fn stage_shattered_halls() -> StageDef {
                 position: (60.0, 25.0),
                 perception: RolePerception {
                     blind: "A door hums at a pitch that changes. Match the tone to pass.",
-                    analyst: "Symbols on the door rearrange. The correct sequence is hidden in the noise.",
+                    delayed: "The symbols on the door are already rearranging, but you see the old arrangement. Ask what's there now.",
                     hallucinating: "The door is open and closed at the same time. Decide which is true.",
                 },
             },
@@ -215,7 +215,7 @@ fn stage_shattered_halls() -> StageDef {
                 position: (40.0, 28.0),
                 perception: RolePerception {
                     blind: "The floor drops away. Stepping stones — you hear them shift underfoot.",
-                    analyst: "A chasm. Some stepping stones are visible but some are fabricated.",
+                    delayed: "The bridge looks whole to you. Your team says it's broken. Trust them — your view is stale.",
                     hallucinating: "The bridge is intact, then shattered. Your balance tells you which tiles hold.",
                 },
             },
@@ -242,7 +242,7 @@ fn stage_drowned_archive() -> StageDef {
                 position: (20.0, 8.0),
                 perception: RolePerception {
                     blind: "Water rushes in channels. The current carries whispers — follow the loudest.",
-                    analyst: "Ink flows across submerged pages. Words form and dissolve. Read fast.",
+                    delayed: "Ink flowed across these pages moments ago. The words you read have already dissolved.",
                     hallucinating: "The ink writes two messages at once. One is a warning, one is a lie.",
                 },
             },
@@ -252,7 +252,7 @@ fn stage_drowned_archive() -> StageDef {
                 position: (40.0, 15.0),
                 perception: RolePerception {
                     blind: "Waterlogged breathing. Something writes on the walls in the dark.",
-                    analyst: "A figure hunched over a desk. Its pen moves but the words are nonsense — or encoded.",
+                    delayed: "A figure hunched over a desk. But it stood up seconds ago — you're watching a ghost of its posture.",
                     hallucinating: "The scribe splits into two. One writes truth, the other writes traps.",
                 },
             },
@@ -262,7 +262,7 @@ fn stage_drowned_archive() -> StageDef {
                 position: (55.0, 10.0),
                 perception: RolePerception {
                     blind: "Water rises. You hear shelves creaking, books floating free. Climb.",
-                    analyst: "The water level obscures the lower shelves. The path is above — if the upper floor is real.",
+                    delayed: "The water looks low to you. Your team says it's rising. You're seeing the level from seconds ago.",
                     hallucinating: "Water rises and falls unpredictably. One rhythm is the real tide.",
                 },
             },
@@ -272,7 +272,7 @@ fn stage_drowned_archive() -> StageDef {
                 position: (30.0, 25.0),
                 perception: RolePerception {
                     blind: "A mechanism clicks in a pattern. Three tumblers — each sounds different.",
-                    analyst: "A catalog index. Some entries point to real shelves, some to empty water.",
+                    delayed: "The catalog shows old entries. The index has already been rearranged — ask your team what it says now.",
                     hallucinating: "The cipher shifts between two solutions. The dimmer one is correct.",
                 },
             },
@@ -282,7 +282,7 @@ fn stage_drowned_archive() -> StageDef {
                 position: (60.0, 22.0),
                 perception: RolePerception {
                     blind: "Paper rustling from every direction. They're closing in.",
-                    analyst: "Loose pages orbit in formation. Some are blank — those are harmless.",
+                    delayed: "Pages drift lazily in the air. But that was seconds ago — they've already swarmed.",
                     hallucinating: "A storm of pages, doubled and tripled. Swat the ones that feel heavy.",
                 },
             },
@@ -309,7 +309,7 @@ fn stage_hollow_garden() -> StageDef {
                 position: (20.0, 10.0),
                 perception: RolePerception {
                     blind: "Thorns scrape across your arms. A gap opens and closes rhythmically.",
-                    analyst: "A wall of thorns. Gaps appear — some lead through, some are visual tricks.",
+                    delayed: "The gap was open moments ago. It's closed now but you still see it open. Ask if there's a way through.",
                     hallucinating: "The thorns bloom and retract in waves. Two patterns overlap — follow the slower one.",
                 },
             },
@@ -319,7 +319,7 @@ fn stage_hollow_garden() -> StageDef {
                 position: (35.0, 20.0),
                 perception: RolePerception {
                     blind: "Something moves underground. You feel vibrations before it surfaces.",
-                    analyst: "Roots erupt from the soil in a pattern. The pattern has gaps — but are they safe?",
+                    delayed: "You see roots erupting where they were seconds ago. The stalker has already moved on.",
                     hallucinating: "Roots lash from below, doubled. The ghost roots pass through you harmlessly.",
                 },
             },
@@ -329,7 +329,7 @@ fn stage_hollow_garden() -> StageDef {
                 position: (50.0, 8.0),
                 perception: RolePerception {
                     blind: "Seeds drop in a musical pattern. Plant them in the right order.",
-                    analyst: "Planting spots glow in sequence. Some spots are fabricated — seeds vanish there.",
+                    delayed: "You see seeds falling — but they landed seconds ago. The planting spots have already shifted.",
                     hallucinating: "Seeds split into pairs mid-air. Catch the heavier one.",
                 },
             },
@@ -339,7 +339,7 @@ fn stage_hollow_garden() -> StageDef {
                 position: (60.0, 25.0),
                 perception: RolePerception {
                     blind: "Walls of leaves shuffle around you. The wind tells you which path just opened.",
-                    analyst: "Hedges rearrange every few seconds. Memorize the true layout before it shifts.",
+                    delayed: "The maze layout you see is outdated. The hedges moved while you were watching the old paths.",
                     hallucinating: "The maze has two configurations overlapping. Walk the intersections.",
                 },
             },
@@ -349,7 +349,7 @@ fn stage_hollow_garden() -> StageDef {
                 position: (68.0, 16.0),
                 perception: RolePerception {
                     blind: "A flower hums. Others nearby answer. Create the right harmony.",
-                    analyst: "Flowers bloom in a color pattern. Match it — but some flowers show false colors.",
+                    delayed: "The flowers already bloomed. You see their old colors — they've changed since.",
                     hallucinating: "Every flower blooms twice. The afterimage is the real color.",
                 },
             },
@@ -375,7 +375,7 @@ fn stage_mirror_vault() -> StageDef {
                 position: (20.0, 8.0),
                 perception: RolePerception {
                     blind: "Two identical sounds from opposite sides. One is the source, one is the echo.",
-                    analyst: "Two identical rooms. Every detail matches. One is fabricated entirely.",
+                    delayed: "Two rooms — but you see the state of both from seconds ago. One changed since. Which?",
                     hallucinating: "Four rooms. Two are reflections of reflections. Find the original.",
                 },
             },
@@ -385,7 +385,7 @@ fn stage_mirror_vault() -> StageDef {
                 position: (60.0, 8.0),
                 perception: RolePerception {
                     blind: "Your own footsteps — but delayed. Something copies your movements.",
-                    analyst: "A copy of you walks in reverse. It opens doors you closed.",
+                    delayed: "A copy of you stands where you were seconds ago. It's your own past trailing behind you.",
                     hallucinating: "Three copies. You are one of them. Which one is moving on their own?",
                 },
             },
@@ -395,7 +395,7 @@ fn stage_mirror_vault() -> StageDef {
                 position: (10.0, 18.0),
                 perception: RolePerception {
                     blind: "The corridor repeats. Same echo, same distance, forever. Break the loop.",
-                    analyst: "The corridor stretches infinitely. But one tile is different — spot it.",
+                    delayed: "You see yourself walking this corridor seconds ago. The loop feeds on your delay.",
                     hallucinating: "The corridor folds on itself. Walk backward to go forward.",
                 },
             },
@@ -405,7 +405,7 @@ fn stage_mirror_vault() -> StageDef {
                 position: (40.0, 18.0),
                 perception: RolePerception {
                     blind: "Perfect symmetry in the echoes. Introduce asymmetry to unlock the way.",
-                    analyst: "Both halves of the room are identical. Find the one tile that differs.",
+                    delayed: "Both halves looked identical seconds ago. One has changed since — but you can't tell which.",
                     hallucinating: "Symmetry is broken everywhere for you. Describe what you see — it's the key.",
                 },
             },
@@ -415,7 +415,7 @@ fn stage_mirror_vault() -> StageDef {
                 position: (70.0, 18.0),
                 perception: RolePerception {
                     blind: "It speaks with your voice. It says the opposite of what you mean.",
-                    analyst: "An NPC that looks exactly like a teammate. Trust level reads wrong.",
+                    delayed: "It looks like a teammate — but from seconds ago. The real one has already moved.",
                     hallucinating: "Your reflection steps out of the glass. It moves before you do.",
                 },
             },
@@ -425,7 +425,7 @@ fn stage_mirror_vault() -> StageDef {
                 position: (40.0, 28.0),
                 perception: RolePerception {
                     blind: "A wall of glass. Tap each pane — one sounds hollow. That's the exit.",
-                    analyst: "A wall of mirrors. One pane shows what's behind it instead of reflecting.",
+                    delayed: "The mirrors showed something different seconds ago. The exit pane keeps shifting before you react.",
                     hallucinating: "Every pane shows a different reality. The one that doesn't shimmer is true.",
                 },
             },
@@ -452,7 +452,7 @@ fn stage_the_static() -> StageDef {
                 position: (15.0, 10.0),
                 perception: RolePerception {
                     blind: "Pure static. No direction, no shape. It is everywhere and nowhere.",
-                    analyst: "A shape made of visual noise. It occupies every tile and no tile.",
+                    delayed: "You see where the noise was. It's already somewhere else. Your delay is fatal here.",
                     hallucinating: "The static takes your shape. Then your ally's shape. Then nothing.",
                 },
             },
@@ -462,7 +462,7 @@ fn stage_the_static() -> StageDef {
                 position: (65.0, 10.0),
                 perception: RolePerception {
                     blind: "A signal buried in noise. Filter it. Your teammates hear different frequencies.",
-                    analyst: "Data streams across every surface. One stream is real. Cross-reference with your team.",
+                    delayed: "The signal already passed. You see its afterimage. Tell your team what it looked like — they see it now.",
                     hallucinating: "The signal is inverted for you. What you discard is what they need.",
                 },
             },
@@ -472,7 +472,7 @@ fn stage_the_static() -> StageDef {
                 position: (30.0, 18.0),
                 perception: RolePerception {
                     blind: "The wall is there. Then it isn't. Time your step between the pulses.",
-                    analyst: "The wall phases between solid and transparent. The cycle is irregular — or is it?",
+                    delayed: "The wall phased open seconds ago. Is it still open? Your view can't tell you. Ask.",
                     hallucinating: "Every wall phases. The real ones phase slower.",
                 },
             },
@@ -481,8 +481,8 @@ fn stage_the_static() -> StageDef {
                 name: "Perception Merge",
                 position: (50.0, 18.0),
                 perception: RolePerception {
-                    blind: "You hear what the Analyst sees. Describe it back to them.",
-                    analyst: "You see what the Hallucinating feels. Translate it for the Blind.",
+                    blind: "You hear what the Delayed sees. Describe it back to them.",
+                    delayed: "You see the past of what the Hallucinating feels. Translate the old version for the Blind.",
                     hallucinating: "All three perceptions are yours now. Find the overlap — that's the truth.",
                 },
             },
@@ -492,7 +492,7 @@ fn stage_the_static() -> StageDef {
                 position: (40.0, 26.0),
                 perception: RolePerception {
                     blind: "Everything is sound. The final threat is silence itself.",
-                    analyst: "Reality folds inward. The map compresses. Find the exit before it's gone.",
+                    delayed: "The world already collapsed. You see the last frame before it ended. Find the exit in the memory.",
                     hallucinating: "All distortions merge into one shape. Face it together or fracture completely.",
                 },
             },
@@ -502,7 +502,7 @@ fn stage_the_static() -> StageDef {
                 position: (40.0, 30.0),
                 perception: RolePerception {
                     blind: "Three tones. Three players. Sing together.",
-                    analyst: "Three symbols. Each player sees one. Combine them.",
+                    delayed: "Three symbols — you see the one from seconds ago. Tell your team what was there before.",
                     hallucinating: "Three truths. Each player holds one. Speak them aloud.",
                 },
             },

@@ -1,5 +1,6 @@
 pub mod components;
 pub mod entity;
+pub mod history;
 
 use std::collections::HashMap;
 
@@ -35,13 +36,6 @@ impl World {
         let entity = Entity(self.next_id);
         self.next_id += 1;
         entity
-    }
-
-    pub fn despawn(&mut self, entity: Entity) {
-        self.positions.remove(&entity);
-        self.npc_markers.remove(&entity);
-        self.puzzle_tiles.remove(&entity);
-        self.encounter_markers.remove(&entity);
     }
 
     // --- Component setters ---
@@ -86,10 +80,6 @@ impl World {
 
     // --- Iterators ---
 
-    pub fn all_positions(&self) -> impl Iterator<Item = (Entity, &Position)> {
-        self.positions.iter().map(|(e, p)| (*e, p))
-    }
-
     pub fn all_npcs(&self) -> impl Iterator<Item = (Entity, &Position, &NpcMarker)> {
         self.npc_markers.iter().filter_map(|(e, m)| {
             self.positions.get(e).map(|p| (*e, p, m))
@@ -102,44 +92,7 @@ impl World {
         })
     }
 
-    pub fn all_encounters(&self) -> impl Iterator<Item = (Entity, &Position, &EncounterMarker)> {
-        self.encounter_markers.iter().filter_map(|(e, m)| {
-            self.positions.get(e).map(|p| (*e, p, m))
-        })
-    }
-
-    pub fn encounter_at(&self, x: i32, y: i32) -> Option<(Entity, &EncounterMarker)> {
-        self.encounter_markers.iter().find_map(|(e, marker)| {
-            self.positions.get(e)
-                .filter(|pos| pos.x as i32 == x && pos.y as i32 == y)
-                .map(|_| (*e, marker))
-        })
-    }
-
-    pub fn encounter_at_mut(&mut self, x: i32, y: i32) -> Option<(Entity, &mut EncounterMarker)> {
-        self.encounter_markers.iter_mut().find_map(|(e, marker)| {
-            self.positions.get(e)
-                .filter(|pos| pos.x as i32 == x && pos.y as i32 == y)
-                .map(|_| (*e, marker))
-        })
-    }
-
     // --- Spatial query ---
-
-    pub fn entity_at(&self, x: i32, y: i32) -> Option<Entity> {
-        self.positions
-            .iter()
-            .find(|(_, p)| p.x as i32 == x && p.y as i32 == y)
-            .map(|(e, _)| *e)
-    }
-
-    pub fn puzzle_tile_at(&self, x: i32, y: i32) -> Option<(Entity, &PuzzleTile)> {
-        self.puzzle_tiles.iter().find_map(|(e, tile)| {
-            self.positions.get(e)
-                .filter(|pos| pos.x as i32 == x && pos.y as i32 == y)
-                .map(|_| (*e, tile))
-        })
-    }
 
     pub fn puzzle_tile_at_mut(&mut self, x: i32, y: i32) -> Option<(Entity, &mut PuzzleTile)> {
         self.puzzle_tiles.iter_mut().find_map(|(e, tile)| {

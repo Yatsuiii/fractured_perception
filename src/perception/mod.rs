@@ -5,17 +5,17 @@
 ///
 /// Each role's builder lives in its own module:
 ///   blind.rs        → no map, only sound cues
-///   analyst.rs      → full map + fabricated tiles that look identical to real ones
+///   delayed.rs       → real map, but entities shown at stale positions
 ///   hallucinating.rs → distorted map, doubled entities, unstable reality
 
-mod analyst;
 mod blind;
+mod delayed;
 mod hallucinating;
 
 use crate::{
     map::Tile,
     player::{Player, Role},
-    world::{entity::Entity, World},
+    world::{entity::Entity, history::PositionHistory, World},
 };
 
 // --- Output types (what the renderer consumes) ---
@@ -27,7 +27,6 @@ pub enum CellColor {
     Floor,       // visible real floor
     Wall,        // visible real wall
     Door,        // visible door between rooms
-    Fabricated,  // Analyst: tile that might not be real (visually = Floor, subtly different)
     Distorted,   // Hallucinating: tile the mind got wrong
 }
 
@@ -86,15 +85,32 @@ pub struct PlayerView {
 
 // --- Entry point ---
 
+/// Overrides driven by threshold events.
+pub struct PerceptionOverrides {
+    /// Extra seconds added to the Delayed's lag.
+    pub delay_extra: f32,
+    /// Whether distortion percentage is doubled for the Hallucinator.
+    pub double_distortion: bool,
+}
+
+impl Default for PerceptionOverrides {
+    fn default() -> Self {
+        Self { delay_extra: 0.0, double_distortion: false }
+    }
+}
+
 pub fn build_view(
     player: &Player,
     player_entities: &[Entity],
     world: &World,
+    history: &PositionHistory,
+    current_time: f32,
+    overrides: &PerceptionOverrides,
 ) -> PlayerView {
     match player.role {
         Role::Blind         => blind::build(player, player_entities, world),
-        Role::VisualAnalyst => analyst::build(player, player_entities, world),
-        Role::Hallucinating => hallucinating::build(player, player_entities, world),
+        Role::Delayed       => delayed::build(player, player_entities, world, history, current_time, overrides.delay_extra),
+        Role::Hallucinating => hallucinating::build(player, player_entities, world, overrides.double_distortion),
     }
 }
 
@@ -110,14 +126,14 @@ fn tile_hash(x: usize, y: usize, seed: u64) -> u64 {
     h ^ (h >> 27)
 }
 
-/// True for ~25 % of floor tiles — these are the Analyst's fabricated tiles.
-fn is_fabricated(map_seed: u64, x: usize, y: usize) -> bool {
-    tile_hash(x, y, map_seed) % 100 < 25
-}
-
 /// True for ~18 % of tiles — these are distorted in the Hallucinating view.
 pub fn is_distorted(map_seed: u64, x: usize, y: usize) -> bool {
     tile_hash(x, y, map_seed.wrapping_add(0xDEAD)) % 100 < 18
+}
+
+/// True for ~36 % of tiles — doubled distortion from Illusion Tier 2.
+pub fn is_distorted_wide(map_seed: u64, x: usize, y: usize) -> bool {
+    tile_hash(x, y, map_seed.wrapping_add(0xDEAD)) % 100 < 36
 }
 
 /// Ghost offset for a given entity — stable per entity, shifts between turns.
@@ -160,48 +176,6 @@ fn cell_from_tile(tile: Tile, visible: bool, revealed: bool) -> PerceivedCell {
     } else {
         hidden_cell()
     }
-}
-
-// --- Shared entity helpers ---
-
-fn build_entities_standard(
-    player: &Player,
-    player_entities: &[Entity],
-    world: &World,
-) -> Vec<PerceivedEntity> {
-    let w = world.map.width;
-    let h = world.map.height;
-    let mut out = Vec::new();
-
-    for &e in player_entities {
-        let Some(pos) = world.get_position(e) else { continue };
-        let x = pos.x as usize;
-        let y = pos.y as usize;
-        if x >= w || y >= h || !player.fov.is_visible(x, y) { continue; }
-
-        let color = if e == player.entity { EntityColor::Self_ } else { EntityColor::Ally };
-        out.push(PerceivedEntity {
-            col: pos.x as u16, row: pos.y as u16,
-            glyph: '@', color, is_ghost: false,
-        });
-    }
-
-    for (_tile_entity, tile_pos, tile) in world.all_puzzle_tiles() {
-        let x = tile_pos.x as usize;
-        let y = tile_pos.y as usize;
-        if x >= w || y >= h || !player.fov.is_visible(x, y) { continue; }
-
-        let glyph = if tile.is_active { '✓' } else { '*' };
-        out.push(PerceivedEntity {
-            col: tile_pos.x as u16,
-            row: tile_pos.y as u16,
-            glyph,
-            color: if tile.is_active { EntityColor::Npc } else { EntityColor::NpcDoubt },
-            is_ghost: false,
-        });
-    }
-
-    out
 }
 
 // --- Shared panel helpers ---

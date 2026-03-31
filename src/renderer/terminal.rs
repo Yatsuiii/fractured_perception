@@ -104,10 +104,10 @@ impl TerminalRenderer {
             cursor::MoveTo(2, 7), Print("       Navigate by sound alone."),
             cursor::MoveTo(2, 8), Print("       You hear what others cannot."),
             ResetColor,
-            cursor::MoveTo(2, 10), SetForegroundColor(Color::Cyan),
-            Print("  [2]  THE VISUAL ANALYST"),
-            cursor::MoveTo(2, 11), Print("       You see everything."),
-            cursor::MoveTo(2, 12), Print("       Half of it is a lie."),
+            cursor::MoveTo(2, 10), SetForegroundColor(Color::DarkBlue),
+            Print("  [2]  THE DELAYED"),
+            cursor::MoveTo(2, 11), Print("       You see the past."),
+            cursor::MoveTo(2, 12), Print("       Reality has moved on."),
             ResetColor,
             cursor::MoveTo(2, 14), SetForegroundColor(Color::DarkYellow),
             Print("  [3]  THE HALLUCINATING"),
@@ -399,7 +399,6 @@ fn cell_appearance(glyph: char, color: CellColor) -> (Color, char) {
         CellColor::Floor      => (Color::DarkGrey,   glyph),
         CellColor::Wall       => (Color::White,      glyph),
         CellColor::Door       => (Color::DarkYellow, glyph),
-        CellColor::Fabricated => (Color::DarkGrey,   glyph), // identical to floor — intentional
         CellColor::Distorted  => (Color::DarkYellow, glyph),
     }
 }
@@ -434,7 +433,7 @@ fn role_color(role: crate::player::Role) -> Color {
     use crate::player::Role;
     match role {
         Role::Blind         => Color::DarkGrey,
-        Role::VisualAnalyst => Color::Cyan,
+        Role::Delayed       => Color::DarkBlue,
         Role::Hallucinating => Color::DarkYellow,
     }
 }

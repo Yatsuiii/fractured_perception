@@ -117,19 +117,19 @@ fn watcher_lines(role: Role, tier: TrustTier) -> Vec<DialogueLine> {
             dl("Trust what you hear. Always.", 0.0, (0.02, 0.0, 0.0, 0.02)),
         ],
 
-        // -- Visual Analyst --
-        (Role::VisualAnalyst, TrustTier::Low) => vec![
-            dl("You see clearly, don't you? How confident.", 0.0, (0.0, 0.0, 0.02, 0.0)),
-            dl("Not everything drawn on these walls is real. But you knew that.", -0.02, (0.0, 0.0, 0.03, 0.0)),
+        // -- Delayed --
+        (Role::Delayed, TrustTier::Low) => vec![
+            dl("You're looking at where I was, not where I am.", 0.0, (0.0, 0.0, 0.02, 0.0)),
+            dl("By the time you react, the moment has already passed.", -0.02, (0.0, 0.0, 0.03, 0.0)),
         ],
-        (Role::VisualAnalyst, TrustTier::Mid) => vec![
-            dl("The fabricated tiles — they look identical, but feel wrong. Count them.", 0.0, (0.02, 0.0, 0.02, 0.0)),
-            dl("I watch. I notice who walks into walls that aren't there.", 0.02, (0.01, 0.0, 0.01, 0.0)),
+        (Role::Delayed, TrustTier::Mid) => vec![
+            dl("Three seconds. That's how far behind you are. Count them.", 0.0, (0.02, 0.0, 0.02, 0.0)),
+            dl("I watch you chase shadows of where things were. It's... poetic.", 0.02, (0.01, 0.0, 0.01, 0.0)),
         ],
-        (Role::VisualAnalyst, TrustTier::High) => vec![
-            dl("One in four tiles you see is a lie. Remember that ratio.", 0.05, (0.05, 0.0, 0.0, 0.0)),
-            dl("The Blind one hears what you cannot see. Talk to each other.", 0.03, (0.03, 0.0, 0.0, 0.02)),
-            dl("I have watched many analysts. Few learn to doubt themselves in time.", 0.0, (0.02, 0.0, 0.0, 0.0)),
+        (Role::Delayed, TrustTier::High) => vec![
+            dl("Learn to predict, not react. The delay is your teacher.", 0.05, (0.05, 0.0, 0.0, 0.0)),
+            dl("The Blind one hears the present. You see the past. Together — clarity.", 0.03, (0.03, 0.0, 0.0, 0.02)),
+            dl("Few who live in the past learn to see the future. You might.", 0.0, (0.02, 0.0, 0.0, 0.0)),
         ],
 
         // -- Hallucinating --
@@ -168,17 +168,17 @@ fn echo_lines(role: Role, tier: TrustTier) -> Vec<DialogueLine> {
             dl("You are the only one who truly listens. The others just look.", 0.03, (0.03, 0.0, 0.0, 0.02)),
         ],
 
-        (Role::VisualAnalyst, TrustTier::Low) => vec![
-            dl("...analyst... analyst... you see so much and understand so little...", 0.0, (0.0, 0.0, 0.02, 0.0)),
-            dl("The echo does not care what you see. Only what is.", -0.01, (0.0, 0.02, 0.0, 0.0)),
+        (Role::Delayed, TrustTier::Low) => vec![
+            dl("...delayed... delayed... you hear me now, but I spoke ages ago...", 0.0, (0.0, 0.0, 0.02, 0.0)),
+            dl("The echo does not wait for you to catch up.", -0.01, (0.0, 0.02, 0.0, 0.0)),
         ],
-        (Role::VisualAnalyst, TrustTier::Mid) => vec![
-            dl("I echo the truth, but it arrives... changed. Like your map.", 0.02, (0.02, 0.0, 0.01, 0.0)),
-            dl("Some walls echo. Some don't. The ones that don't are fabricated.", 0.03, (0.03, 0.0, 0.0, 0.0)),
+        (Role::Delayed, TrustTier::Mid) => vec![
+            dl("I echo the truth, but by the time it reaches you... things have moved.", 0.02, (0.02, 0.0, 0.01, 0.0)),
+            dl("Listen for where the echo is going, not where it was.", 0.03, (0.03, 0.0, 0.0, 0.0)),
         ],
-        (Role::VisualAnalyst, TrustTier::High) => vec![
-            dl("Tap the walls. The real ones resonate. I hear the difference — now you will too.", 0.05, (0.05, 0.0, 0.0, 0.0)),
-            dl("The fabrications are consistent — same tiles, every time. Map them.", 0.03, (0.03, 0.0, 0.0, 0.02)),
+        (Role::Delayed, TrustTier::High) => vec![
+            dl("The delay is a gift. You see trajectories where others see positions.", 0.05, (0.05, 0.0, 0.0, 0.0)),
+            dl("Track the pattern of movement. Where things were tells you where they'll be.", 0.03, (0.03, 0.0, 0.0, 0.02)),
         ],
 
         (Role::Hallucinating, TrustTier::Low) => vec![
@@ -215,17 +215,17 @@ fn keeper_lines(role: Role, tier: TrustTier) -> Vec<DialogueLine> {
             dl("Take the eastern corridor. The last puzzle waits there.", 0.03, (0.03, 0.0, 0.0, 0.02)),
         ],
 
-        (Role::VisualAnalyst, TrustTier::Low) => vec![
-            dl("Another one who trusts their eyes. That will be your mistake.", 0.0, (0.0, 0.0, 0.03, 0.0)),
-            dl("The hall is real. I am real. Beyond that, I guarantee nothing.", -0.02, (0.0, 0.0, 0.02, 0.0)),
+        (Role::Delayed, TrustTier::Low) => vec![
+            dl("You live three seconds behind. That makes you predictable.", 0.0, (0.0, 0.0, 0.03, 0.0)),
+            dl("I guard the present. You inhabit the past.", -0.02, (0.0, 0.0, 0.02, 0.0)),
         ],
-        (Role::VisualAnalyst, TrustTier::Mid) => vec![
-            dl("You are learning to doubt. Good. Doubt is the first step to sight.", 0.03, (0.02, 0.0, 0.0, 0.0)),
-            dl("The central hall connects all wings. Use it to orient yourself.", 0.02, (0.02, 0.0, 0.0, 0.0)),
+        (Role::Delayed, TrustTier::Mid) => vec![
+            dl("You are learning to anticipate. Good. The delay sharpens instinct.", 0.03, (0.02, 0.0, 0.0, 0.0)),
+            dl("The central hall connects all wings. Memorize the layout — it won't move.", 0.02, (0.02, 0.0, 0.0, 0.0)),
         ],
-        (Role::VisualAnalyst, TrustTier::High) => vec![
-            dl("You've earned this: the fabrications follow the seed. They never change.", 0.05, (0.05, 0.0, 0.0, 0.0)),
-            dl("Mark the false walls in your mind. The pattern is consistent.", 0.03, (0.03, 0.0, 0.0, 0.02)),
+        (Role::Delayed, TrustTier::High) => vec![
+            dl("The map is honest with you. Only the living things deceive.", 0.05, (0.05, 0.0, 0.0, 0.0)),
+            dl("Remember paths, not positions. The walls stay true.", 0.03, (0.03, 0.0, 0.0, 0.02)),
         ],
 
         (Role::Hallucinating, TrustTier::Low) => vec![
@@ -263,18 +263,18 @@ fn witness_lines(role: Role, tier: TrustTier) -> Vec<DialogueLine> {
             dl("Listen to the final tile. It will tell you what you've become.", 0.0, (0.02, 0.0, 0.0, 0.02)),
         ],
 
-        (Role::VisualAnalyst, TrustTier::Low) => vec![
+        (Role::Delayed, TrustTier::Low) => vec![
             dl("...", 0.0, (0.0, 0.0, 0.0, 0.0)),
-            dl("You analyze. I witness. We are not the same.", 0.0, (0.0, 0.0, 0.01, 0.0)),
+            dl("You chase ghosts of the past. I witness the present.", 0.0, (0.0, 0.0, 0.01, 0.0)),
         ],
-        (Role::VisualAnalyst, TrustTier::Mid) => vec![
-            dl("The terminus holds the last puzzle. Your map may lie about the path.", 0.02, (0.02, 0.0, 0.02, 0.0)),
-            dl("Check with the Blind one before you trust a corridor here.", 0.03, (0.03, 0.0, 0.0, 0.0)),
+        (Role::Delayed, TrustTier::Mid) => vec![
+            dl("The terminus holds the last puzzle. Trust the walls — they don't move.", 0.02, (0.02, 0.0, 0.02, 0.0)),
+            dl("Ask the Blind one where things are now. Your eyes show you where they were.", 0.03, (0.03, 0.0, 0.0, 0.0)),
         ],
-        (Role::VisualAnalyst, TrustTier::High) => vec![
-            dl("Every ending I've witnessed began with someone trusting the wrong tile.", 0.05, (0.05, 0.0, 0.0, 0.0)),
-            dl("Your illusion score is being tracked. Walk carefully.", 0.03, (0.03, 0.0, 0.0, 0.02)),
-            dl("The game ends. But what you carry out of it — that depends on the numbers.", 0.0, (0.02, 0.0, 0.0, 0.02)),
+        (Role::Delayed, TrustTier::High) => vec![
+            dl("Every ending I've witnessed began with someone reacting too late.", 0.05, (0.05, 0.0, 0.0, 0.0)),
+            dl("Your delay is being measured. Anticipate, don't react.", 0.03, (0.03, 0.0, 0.0, 0.02)),
+            dl("The game ends. Whether you caught up to reality — that's what matters.", 0.0, (0.02, 0.0, 0.0, 0.02)),
         ],
 
         (Role::Hallucinating, TrustTier::Low) => vec![
