@@ -97,5 +97,8 @@ When assisting:
 - Pure Rust implementation
 - No Lua or external scripting layers
 - Focus on building core systems first
+- Three roles: Blind, Delayed, Hallucinating — each with fully distinct perception views
+- Five stages with per-role encounter perception, threshold-driven world mutations, and stage progression
+- Engine split into submodules: input, render, movement, update, stage, dialogue
 
 Future expansions may include additional layers, but not at this stage.

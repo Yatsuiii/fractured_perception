@@ -15,8 +15,8 @@ The core mechanic is **communication under perceptual uncertainty**. Not reflexe
 **The Blind**
 Navigates entirely by sound. No visuals. Hears things the others miss. The NPC's voice is their only perception of it.
 
-**The Visual Analyst**
-Sees the full layout — but half of it is fabricated. False doors, phantom traps, paths that lead nowhere. Real and fake are indistinguishable.
+**The Delayed**
+Sees the real layout — but everything is shown seconds behind. Entities appear where they were, not where they are. The world has moved on; you haven't.
 
 **The Hallucinating**
 Sees everything distorted — objects doubled, walls stretching, allies sometimes looking like enemies. Every truth arrives wrapped in noise.
@@ -40,14 +40,13 @@ These accumulate from every choice, every NPC interaction, every moment of trust
 
 NPCs are "Mirrors" — the same character appears completely differently to each role:
 
-- **Blind:** invisible, but emits positional sound. The voice IS the NPC.
-- **Visual Analyst:** visible, but trust level affects whether it seems real. Low trust = flickers, label shows "?"
-- **Hallucinating:** always sees a ghost duplicate. Hostile red tint if trust drops below 0.3.
+- **Blind:** invisible, but emits positional sound cues (direction arrow + distance intensity). The voice IS the NPC.
+- **Delayed:** visible at stale position, trust level affects glyph — high trust shows `W`, low trust shows `?` with doubt color.
+- **Hallucinating:** always sees a ghost duplicate at an offset. NPC rendered with ghost color.
 
-Every NPC interaction goes through a single function: `getNPCDialogue(player, npcName)`.
-Right now it returns scripted lines. Swapping the inside to call Claude API enables live AI dialogue — nothing else changes.
+NPC dialogue is role-specific scripted lines accessed via the dialogue system. Trust tracked per-player and modified by encounters and interactions.
 
-Two NPCs: **The Watcher** (stands in corner, cryptic) and **The Archivist** (knows pre-player history).
+NPCs per stage: **The Watcher**, **The Echo**, **The Archivist**, **The Gardener**, **The Keeper**, **The Witness** — each placed in thematically appropriate stages.
 
 ---
 
@@ -64,17 +63,29 @@ The first and primary puzzle. Tiles must be activated in sequence. The order cha
 - Full game concept and design
 - Core design and perception systems documented
 - Engine loop — input → update → perception → render, 16 ms frame cap
-- Three-role perception system (Blind, VisualAnalyst, Hallucinating) — fully distinct views
+- Engine split into submodules by concern: `input.rs`, `render.rs`, `movement.rs`, `update.rs`, `stage.rs`, `dialogue.rs`
+- Three-role perception system (Blind, Delayed, Hallucinating) — fully distinct views per role
+- Per-role encounter perception — Blind hears sound cues, Delayed sees stale glyphs, Hallucinating sees ghost duplicates
 - FOV system — Bresenham LOS, per-player reveal tracking
-- World / ECS — entity spawning, position, NPC marker, puzzle tile components
+- World / ECS — entity spawning, position, NPC marker, puzzle tile, encounter marker components
 - Map — 6-room dungeon with corridors, deterministic seed
 - State machine — MainMenu → Playing ↔ Paused, Playing → GameOver
-- Role-gated puzzle activation — Blind→#1, Analyst→#2, Hallucinating→#3
+- Role-gated puzzle activation — Blind→#1, Delayed→#2, Hallucinating→#3
 - Puzzle progress tracking — 3/3 triggers win screen
 - Co-op team event log — shared side panel, 8-entry rolling, 4 s fade
 - Ping system — E key, logged to all role panels
 - Session log file — timestamped events written to `logs/session_<unix>.log` per run
 - Watcher NPC — spawned, moves toward nearest player every 0.5 s, visible to all roles
+- Encounter system — 3 kinds (Puzzle/Enemy/Obstacle), spawned per stage, interact with E key, resolve for T/C/I/B rewards
+- 5 stages defined — Shattered Halls, Drowned Archive, Hollow Garden, Mirror Vault, The Static — each with unique encounters, NPCs, and per-role perception text
+- Phantom encounter spawning — Chaos T1 threshold spawns a fake encounter that boosts Illusion on resolve
+- Stage progression — encounter clear threshold opens gate, advance to next stage
+- Event bus — typed events (PlayerMoved, EncounterResolved, ThresholdCrossed, etc.)
+- T/C/I/B threshold system — Tier 1/2 thresholds trigger world mutations (FOV bonus, delay penalty, distortion doubling, stat dampening)
+- Delayed perception — entities shown at positions from seconds ago via PositionHistory
+- Hallucinating perception — tile distortion (18%/36%), ghost entity duplicates, stability meter
+- Dialogue system — NPC interaction with scripted lines, role-specific dialogue
+- NPC trust per-player — trust modifiers tracked, affect NPC glyph and color in perception
 
 ### Todo — Rust prototype
 
@@ -84,23 +95,20 @@ The first and primary puzzle. Tiles must be activated in sequence. The order cha
 - [ ] `map::get()` / `map::set()` have no bounds check — will panic on bad input
 
 #### Core systems (not yet functional)
-- [ ] NPC trust interactions — `adjust_trust()` exists but is never called; trust never changes
-- [ ] T/C/I/B hidden state consequences — stats accumulate and display but never affect perception, NPCs, or outcomes
-- [ ] NPC dialogue / interaction system — no way for players to talk to the Watcher; no hints, trades, or story
 - [ ] Loss condition — no way to fail; game runs indefinitely if players can't solve puzzles
+- [ ] T/C/I/B ending determination — `dominant()` method exists but endings not implemented yet
+- [ ] NPC dialogue depth — scripted lines only; no branching, no trust-gated responses
 
 #### Gameplay depth
 - [ ] Echo Chamber puzzle — tiles placed but no sequence ordering or per-role signals; everyone sees the same hint
 - [ ] Co-op puzzle sequencing — two-phase activation requiring two roles to coordinate per puzzle
-- [ ] Doors and interactive objects — only Floor/Wall tiles; no doors, levers, or interactables
-- [ ] Deepen Blind sound system — only direction arrows + distance labels; needs puzzle hum, door creak, NPC speech lines
+- [ ] Doors and interactive objects — Door tile exists in map but no open/close mechanic
 - [ ] Win/loss summary screen — currently just "ALL PUZZLES SOLVED"; needs per-role stats, dominant T/C/I/B, session time
-- [ ] The Archivist NPC — second NPC described in design; not yet spawned
+- [ ] The Archivist NPC — second NPC described in design; spawned in some stages but no unique behavior
 
 #### Polish
 - [ ] Role assignment system — currently hardcoded in Engine; needs a selection screen
 - [ ] Terminal resize handling — rendering breaks if terminal is resized mid-game
-- [ ] Remove dead Event variants — `EntityDied` and `StateChange` never emitted; clean up or implement
 - [ ] Session logger graceful failure — panics on disk full / read-only fs; should degrade silently
 
 ### Deferred for now
@@ -183,7 +191,7 @@ Target audience: Phasmophobia, Keep Talking and Nobody Explodes, It Takes Two pl
 
 ## Developer profile
 
-- Beginner Rust, focusing on game engine systems
+- Building Rust game engine systems (growing proficiency)
 - Beginner C++
 - Strong on game design and creative vision
 - Solo dev (no team yet)

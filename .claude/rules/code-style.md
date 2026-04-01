@@ -11,7 +11,9 @@
 
 ## Project Structure
 
-- Organize code into modules by system (e.g., state, events, entities)
+- Organize code into modules by system (e.g., state, events, encounter, perception, world)
+- Large systems split into submodules by concern (e.g., engine/ has input, render, movement, update, stage, dialogue)
+- Use `impl super::Type` pattern in submodule files, `pub(super)` for cross-module visibility
 - Avoid putting too much logic inside `main.rs`
 - Use separate files for major systems
 - Keep public interfaces minimal
