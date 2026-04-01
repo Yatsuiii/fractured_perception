@@ -22,6 +22,7 @@ impl HiddenState {
     pub fn add_illusion(&mut self, v: f32){ self.illusion = (self.illusion + v).clamp(0.0, 99.9); }
     pub fn add_balance(&mut self, v: f32) { self.balance  = (self.balance  + v).clamp(0.0, 99.9); }
 
+    #[allow(dead_code)]
     pub fn dominant(&self) -> &'static str {
         let vals = [
             ("Truth",   self.truth),

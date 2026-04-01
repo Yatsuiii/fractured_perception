@@ -3,6 +3,7 @@ pub mod terminal;
 use crate::{perception::PlayerView, state::GameState};
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum RenderError {
     Io(std::io::Error),
 }

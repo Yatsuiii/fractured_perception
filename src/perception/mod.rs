@@ -45,6 +45,7 @@ pub struct PerceivedEntity {
 }
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum EntityColor {
     Self_,      // the observer themselves
     Ally,       // other players

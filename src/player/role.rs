@@ -14,6 +14,7 @@ impl Role {
         }
     }
 
+    #[allow(dead_code)]
     pub fn hint(self) -> &'static str {
         match self {
             Role::Blind => "You navigate by sound alone.",

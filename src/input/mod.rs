@@ -58,11 +58,13 @@ impl InputState {
     }
 
     /// True while a key is held down (pressed or repeating).
+    #[allow(dead_code)]
     pub fn is_active(&self, key: &Key) -> bool {
         self.current.contains(key)
     }
 
     /// True on the first frame after a key is released.
+    #[allow(dead_code)]
     pub fn is_released(&self, key: &Key) -> bool {
         !self.current.contains(key) && self.previous.contains(key)
     }

@@ -58,6 +58,7 @@ impl Threshold {
 
     /// True if this threshold's effect is checked every tick (ongoing).
     /// False if the effect fires once and is done.
+    #[allow(dead_code)]
     pub fn is_ongoing(self) -> bool {
         matches!(self, Threshold::ChaosTier2 | Threshold::BalanceTier1)
     }

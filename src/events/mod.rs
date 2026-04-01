@@ -4,6 +4,7 @@ use crate::{player::Role, state::GameState, world::entity::Entity};
 
 use thresholds::Threshold;
 
+#[allow(dead_code)]
 pub enum Event {
     PlayerMoved { entity: Entity, x: f32, y: f32 },
     EntityDied { entity: Entity },
@@ -18,6 +19,7 @@ pub enum Event {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub enum TrustReason {
     PuzzleSolved,
     NpcProximity,
