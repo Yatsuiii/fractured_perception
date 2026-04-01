@@ -28,7 +28,6 @@ impl EncounterKind {
         }
     }
 
-    #[allow(dead_code)]
     pub fn glyph(self) -> char {
         match self {
             EncounterKind::Puzzle   => '?',

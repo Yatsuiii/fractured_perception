@@ -1,4 +1,5 @@
 use crate::{
+    encounter::EncounterKind,
     player::Player,
     world::{entity::Entity, World},
 };
@@ -53,6 +54,28 @@ pub fn build(player: &Player, player_entities: &[Entity], world: &World) -> Play
                     color: PanelColor::Yellow,
                 });
                 panel.push(PanelLine { text: "    \"...\"".into(), color: PanelColor::Grey });
+                heard_anything = true;
+            }
+        }
+
+        // Active encounters within hearing range.
+        for (_enc_entity, enc_pos, marker) in world.all_encounters() {
+            if !marker.is_active() { continue; }
+            let dx = enc_pos.x - ox;
+            let dy = enc_pos.y - oy;
+            let dist = (dx * dx + dy * dy).sqrt();
+            if dist < 10.0 {
+                let arrow = direction_arrow(dx, dy);
+                let intensity = if dist < 3.0 { "loud" } else if dist < 6.0 { "near" } else { "faint" };
+                let sound = match marker.kind {
+                    EncounterKind::Puzzle   => "a rhythmic hum",
+                    EncounterKind::Enemy    => "a low growl",
+                    EncounterKind::Obstacle => "shifting stone",
+                };
+                panel.push(PanelLine {
+                    text: format!("  {} {} [{}]", arrow, sound, intensity),
+                    color: PanelColor::Yellow,
+                });
                 heard_anything = true;
             }
         }

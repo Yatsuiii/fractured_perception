@@ -92,6 +92,12 @@ impl World {
         })
     }
 
+    pub fn all_encounters(&self) -> impl Iterator<Item = (Entity, &Position, &EncounterMarker)> {
+        self.encounter_markers.iter().filter_map(|(e, m)| {
+            self.positions.get(e).map(|p| (*e, p, m))
+        })
+    }
+
     // --- Spatial query ---
 
     pub fn puzzle_tile_at_mut(&mut self, x: i32, y: i32) -> Option<(Entity, &mut PuzzleTile)> {

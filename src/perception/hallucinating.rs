@@ -103,6 +103,39 @@ pub fn build(player: &Player, player_entities: &[Entity], world: &World, double_
         }
     }
 
+    // Encounters — real + ghost duplicate, active ones only.
+    for (enc_entity, enc_pos, marker) in world.all_encounters() {
+        if !marker.is_active() { continue; }
+        let x = enc_pos.x as usize;
+        let y = enc_pos.y as usize;
+        if x >= w || y >= h || !player.fov.is_visible(x, y) { continue; }
+
+        let glyph = marker.kind.glyph();
+
+        // Real position.
+        entities.push(PerceivedEntity {
+            col: enc_pos.x as u16,
+            row: enc_pos.y as u16,
+            glyph,
+            color: EntityColor::Npc,
+            is_ghost: false,
+        });
+
+        // Ghost duplicate at offset.
+        let (gox, goy) = ghost_offset(enc_entity);
+        let gc = enc_pos.x as i32 + gox;
+        let gr = enc_pos.y as i32 + goy;
+        if gc >= 0 && gr >= 0 && (gc as usize) < w && (gr as usize) < h {
+            entities.push(PerceivedEntity {
+                col: gc as u16,
+                row: gr as u16,
+                glyph,
+                color: EntityColor::Ghost,
+                is_ghost: true,
+            });
+        }
+    }
+
     // Stability = how much of what they see is real.
     let visible_count = (0..h).flat_map(|y| (0..w).map(move |x| (x, y)))
         .filter(|&(x, y)| player.fov.is_visible(x, y))

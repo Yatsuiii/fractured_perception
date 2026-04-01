@@ -6,6 +6,7 @@
 /// where they *are*. The side panel shows a delay indicator and warnings.
 
 use crate::{
+    encounter::EncounterState,
     player::Player,
     world::{entity::Entity, history::PositionHistory, World},
 };
@@ -130,6 +131,28 @@ pub fn build(
             row: tile_pos.y as u16,
             glyph,
             color: if tile.is_active { EntityColor::Npc } else { EntityColor::NpcDoubt },
+            is_ghost: false,
+        });
+    }
+
+    // Encounters — shown at position, but resolved ones still look active (stale).
+    for (_enc_entity, enc_pos, marker) in world.all_encounters() {
+        let x = enc_pos.x as usize;
+        let y = enc_pos.y as usize;
+        if x >= w || y >= h || !player.fov.is_visible(x, y) { continue; }
+
+        // The Delayed always sees encounters as active — their view is behind.
+        let glyph = marker.kind.glyph();
+        let color = match marker.state {
+            EncounterState::Active   => EntityColor::Npc,
+            EncounterState::Resolved => EntityColor::NpcDoubt,
+        };
+
+        entities.push(PerceivedEntity {
+            col: enc_pos.x as u16,
+            row: enc_pos.y as u16,
+            glyph,
+            color,
             is_ghost: false,
         });
     }
