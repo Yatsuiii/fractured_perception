@@ -104,7 +104,12 @@ impl Engine {
                 break;
             }
 
-            self.update();
+            self.update_variable();
+
+            while self.time.consume_fixed_step() {
+                self.update_fixed();
+            }
+
             self.render()?;
 
             let spent = frame_start.elapsed();

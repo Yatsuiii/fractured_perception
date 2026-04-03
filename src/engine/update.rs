@@ -1,18 +1,27 @@
 use crate::{
     events::{Event, TrustReason, thresholds::Threshold},
+    state::GameState,
     world::entity::Entity,
 };
 
 impl super::Engine {
-    pub(super) fn update(&mut self) {
+    pub(super) fn update_variable(&mut self) {
         self.state.apply_pending();
-        self.record_positions();
-        self.check_thresholds();
-        self.apply_ongoing_thresholds();
-        self.tick_npc_movement();
-        self.tick_npc_proximity_trust();
-        self.tick_companions();
         self.process_events();
+    }
+
+    pub(super) fn update_fixed(&mut self) {
+        match self.state.current() {
+            GameState::Playing | GameState::Dialogue => {
+                self.record_positions();
+                self.check_thresholds();
+                self.apply_ongoing_thresholds();
+                self.tick_npc_movement();
+                self.tick_npc_proximity_trust();
+                self.tick_companions();
+            }
+            _ => {}
+        }
     }
 
     fn record_positions(&mut self) {
@@ -32,7 +41,7 @@ impl super::Engine {
 
     fn apply_ongoing_thresholds(&mut self) {
         if self.threshold_tracker.is_active(Threshold::ChaosTier2) {
-            let delta = self.time.delta;
+            let delta = crate::engine::time::FIXED_TIME_STEP;
             let idx = self.human_idx;
             for &npc in &self.session.npc_entities {
                 let base = self.session.world.get_npc_marker(npc)
