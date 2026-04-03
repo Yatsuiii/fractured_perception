@@ -1,11 +1,17 @@
 use crate::{
     encounter::{EncounterMarker, EncounterState, EncounterKind, EncounterPerception},
-    player::{Player, Role},
+    player::{Player, HiddenState, Role},
     stage::{get_stage_def, get_theme, maps, StageDef, Progression},
     world::{components::{NpcMarker, Position, PuzzleTile}, entity::Entity, World},
 };
 
-pub(super) fn build_stage(stage_def: &StageDef) -> (World, [Entity; 3], Vec<Entity>, Vec<Entity>) {
+use super::session::Session;
+
+// ---------------------------------------------------------------------------
+// Stage building
+// ---------------------------------------------------------------------------
+
+fn build_stage(stage_def: &StageDef) -> (World, [Entity; 3], Vec<Entity>, Vec<Entity>) {
     let map = maps::generate_stage_map(stage_def.theme.stage_number() - 1);
     let mut world = World::new(map);
 
@@ -39,9 +45,37 @@ pub(super) fn build_stage(stage_def: &StageDef) -> (World, [Entity; 3], Vec<Enti
     (world, [e0, e1, e2], npc_entities, encounter_entities)
 }
 
+/// Builds a complete Session from a stage definition — world, players, FOV, everything.
+pub(super) fn build_session(
+    stage_def: &StageDef,
+    roles: [Role; 3],
+    hidden_states: Option<[HiddenState; 3]>,
+) -> Session {
+    let (world, entities, npc_entities, encounter_entities) = build_stage(stage_def);
+    let (w, h) = (world.map.width, world.map.height);
+
+    let mut players = std::array::from_fn(|i| {
+        let mut p = Player::new(entities[i], roles[i], w, h);
+        if let Some(ref hs) = hidden_states {
+            p.hidden_state = hs[i].clone();
+        }
+        p
+    });
+
+    for player in &mut players {
+        world.compute_fov_into(player.entity, super::FOV_RADIUS, &mut player.fov);
+    }
+
+    Session::new(world, players, npc_entities, encounter_entities)
+}
+
+// ---------------------------------------------------------------------------
+// Engine methods — stage lifecycle
+// ---------------------------------------------------------------------------
+
 impl super::Engine {
     pub(super) fn spawn_phantom_encounter(&mut self) {
-        let player_pos = match self.world.get_position(self.human().entity) {
+        let player_pos = match self.session.world.get_position(self.human().entity) {
             Some(p) => *p,
             None => return,
         };
@@ -54,10 +88,10 @@ impl super::Engine {
         for (dx, dy) in offsets {
             let nx = player_pos.x as i32 + dx;
             let ny = player_pos.y as i32 + dy;
-            if self.world.map.is_walkable(nx, ny) {
-                let e = self.world.spawn();
-                self.world.add_position(e, Position { x: nx as f32, y: ny as f32 });
-                self.world.add_encounter(e, EncounterMarker {
+            if self.session.world.map.is_walkable(nx, ny) {
+                let e = self.session.world.spawn();
+                self.session.world.add_position(e, Position { x: nx as f32, y: ny as f32 });
+                self.session.world.add_encounter(e, EncounterMarker {
                     kind: EncounterKind::Puzzle,
                     name: "Phantom Signal",
                     state: EncounterState::Active,
@@ -67,7 +101,7 @@ impl super::Engine {
                         hallucinating: "It shimmers and splits. Which one is real?",
                     },
                 });
-                self.encounter_entities.push(e);
+                self.session.encounter_entities.push(e);
                 return;
             }
         }
@@ -87,45 +121,15 @@ impl super::Engine {
         self.state.transition(crate::state::GameState::StageTransition);
     }
 
-    fn install_stage(
-        &mut self,
-        world: World,
-        players: [Player; 3],
-        npc_entities: Vec<Entity>,
-        encounter_entities: Vec<Entity>,
-    ) {
-        self.world = world;
-        self.players = players;
-        self.npc_entities = npc_entities;
-        self.encounter_entities = encounter_entities;
-        self.activated_puzzles.clear();
-        self.puzzle_flash = None;
-        self.event_log.clear();
-        self.position_history.clear();
-        self.last_ai_tick = 0.0;
-        self.last_companion_tick = 0.0;
-        self.dialogue_session = None;
-    }
-
     fn load_current_stage(&mut self) {
         let stage_def = get_stage_def(self.progression.current_stage);
-        let (world, entities, npc_entities, encounter_entities) = build_stage(&stage_def);
-        let (w, h) = (world.map.width, world.map.height);
 
-        let hidden_states: Vec<_> = self.players.iter().map(|p| p.hidden_state.clone()).collect();
-        let roles: Vec<_> = self.players.iter().map(|p| p.role).collect();
-
-        let mut players = std::array::from_fn(|i| {
-            let mut p = Player::new(entities[i], roles[i], w, h);
-            p.hidden_state = hidden_states[i].clone();
-            p
+        let roles = std::array::from_fn(|i| self.session.players[i].role);
+        let hidden_states: [HiddenState; 3] = std::array::from_fn(|i| {
+            self.session.players[i].hidden_state.clone()
         });
 
-        for player in &mut players {
-            self.world.compute_fov_into(player.entity, super::FOV_RADIUS, &mut player.fov);
-        }
-
-        self.install_stage(world, players, npc_entities, encounter_entities);
+        self.session = build_session(&stage_def, roles, Some(hidden_states));
 
         let theme = get_theme(self.progression.current_stage);
         self.session_logger.log(&format!("  Entering: {}", theme.name()));
@@ -133,18 +137,11 @@ impl super::Engine {
 
     pub(super) fn reset(&mut self) {
         self.progression = Progression::new();
+
         let stage_def = get_stage_def(0);
-        let (world, entities, npc_entities, encounter_entities) = build_stage(&stage_def);
-        let (w, h) = (world.map.width, world.map.height);
-
         let default_roles = [Role::Blind, Role::Delayed, Role::Hallucinating];
-        let mut players = std::array::from_fn(|i| Player::new(entities[i], default_roles[i], w, h));
+        self.session = build_session(&stage_def, default_roles, None);
 
-        for player in &mut players {
-            world.compute_fov_into(player.entity, super::FOV_RADIUS, &mut player.fov);
-        }
-
-        self.install_stage(world, players, npc_entities, encounter_entities);
         self.human_idx = 0;
         self.threshold_tracker.clear();
         self.chosen_role = None;

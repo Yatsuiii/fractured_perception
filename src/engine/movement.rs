@@ -24,16 +24,16 @@ impl super::Engine {
 
         let entity = self.human().entity;
 
-        let (nx, ny) = match self.world.get_position(entity) {
+        let (nx, ny) = match self.session.world.get_position(entity) {
             Some(pos) => (pos.x as i32 + dx, pos.y as i32 + dy),
             None => return,
         };
 
-        if !self.world.map.is_walkable(nx, ny) {
+        if !self.session.world.map.is_walkable(nx, ny) {
             return;
         }
 
-        if let Some(pos) = self.world.get_position_mut(entity) {
+        if let Some(pos) = self.session.world.get_position_mut(entity) {
             pos.x = nx as f32;
             pos.y = ny as f32;
         }
@@ -48,7 +48,7 @@ impl super::Engine {
     }
 
     fn try_activate_puzzle(&mut self, x: i32, y: i32) -> bool {
-        let puzzle_tile = match self.world.puzzle_tile_at_mut(x, y) {
+        let puzzle_tile = match self.session.world.puzzle_tile_at_mut(x, y) {
             Some((_, tile)) => tile,
             None => return false,
         };
@@ -75,13 +75,14 @@ impl super::Engine {
 
     fn post_move_effects(&mut self, entity: Entity, x: usize, y: usize) {
         let effective_fov = super::FOV_RADIUS + self.threshold_tracker.fov_bonus();
-        self.world.compute_fov_into(entity, effective_fov, &mut self.players[self.human_idx].fov);
+        let idx = self.human_idx;
+        self.session.world.compute_fov_into(entity, effective_fov, &mut self.session.players[idx].fov);
 
         if self.human().role == Role::Hallucinating {
             let was_distorted = if self.threshold_tracker.double_distortion() {
-                crate::perception::is_distorted_wide(self.world.map.seed, x, y)
+                crate::perception::is_distorted_wide(self.session.world.map.seed, x, y)
             } else {
-                crate::perception::is_distorted(self.world.map.seed, x, y)
+                crate::perception::is_distorted(self.session.world.map.seed, x, y)
             };
             if was_distorted {
                 self.human_mut().hidden_state.add_balance(0.02);
@@ -92,9 +93,9 @@ impl super::Engine {
     }
 
     pub(super) fn try_interact_encounter(&mut self) -> bool {
-        let active_encounters: Vec<Entity> = self.encounter_entities.iter()
+        let active_encounters: Vec<Entity> = self.session.encounter_entities.iter()
             .copied()
-            .filter(|&e| self.world.get_encounter(e).map_or(false, |m| m.is_active()))
+            .filter(|&e| self.session.world.get_encounter(e).map_or(false, |m| m.is_active()))
             .collect();
 
         let (enc_entity, _) = match self.closest_entity_in_range(&active_encounters, 4.0) {
@@ -103,24 +104,24 @@ impl super::Engine {
         };
 
         let (enc_name, enc_kind, role_text) = {
-            let marker = self.world.get_encounter(enc_entity).unwrap();
+            let marker = self.session.world.get_encounter(enc_entity).unwrap();
             let role = self.human().role;
             (marker.name, marker.kind, marker.text_for_role(role))
         };
 
-        self.event_log.push(
+        self.session.event_log.push(
             format!("  [{}] {}", enc_kind.label(), enc_name),
             PanelColor::Yellow,
             self.time.elapsed,
         );
-        self.event_log.push(
+        self.session.event_log.push(
             format!("  {}", truncate_text(role_text, 24)),
             PanelColor::Grey,
             self.time.elapsed,
         );
         self.session_logger.log(&format!("  Encounter: {} ({})", enc_name, enc_kind.label()));
 
-        if let Some(marker) = self.world.get_encounter_mut(enc_entity) {
+        if let Some(marker) = self.session.world.get_encounter_mut(enc_entity) {
             marker.resolve();
         }
 
@@ -128,7 +129,7 @@ impl super::Engine {
 
         if enc_name == "Phantom Signal" {
             self.human_mut().hidden_state.add_illusion(0.1);
-            self.event_log.push(
+            self.session.event_log.push(
                 "  ...it was never real.".into(),
                 PanelColor::Red,
                 self.time.elapsed,
@@ -146,7 +147,7 @@ impl super::Engine {
         let stage_def = get_stage_def(self.progression.current_stage);
         let gate_just_opened = self.progression.resolve_encounter(stage_def.clear_threshold);
         if gate_just_opened {
-            self.event_log.push(
+            self.session.event_log.push(
                 "  >>> GATE OPENED <<<".into(),
                 PanelColor::Green,
                 self.time.elapsed,
@@ -155,21 +156,21 @@ impl super::Engine {
         }
 
         let idx = self.human_idx;
-        for &npc in &self.npc_entities {
-            let base = self.world.get_npc_marker(npc)
+        for &npc in &self.session.npc_entities {
+            let base = self.session.world.get_npc_marker(npc)
                 .map(|m| m.base_trust).unwrap_or(0.5);
-            self.players[idx].adjust_trust(npc, 0.08, base);
+            self.session.players[idx].adjust_trust(npc, 0.08, base);
         }
 
         true
     }
 
     pub(super) fn closest_entity_in_range(&self, entities: &[Entity], range_sq: f32) -> Option<(Entity, f32)> {
-        let player_pos = self.world.get_position(self.human().entity)?;
+        let player_pos = self.session.world.get_position(self.human().entity)?;
 
         let mut best: Option<(Entity, f32)> = None;
         for &e in entities {
-            let pos = match self.world.get_position(e) {
+            let pos = match self.session.world.get_position(e) {
                 Some(p) => p,
                 None => continue,
             };

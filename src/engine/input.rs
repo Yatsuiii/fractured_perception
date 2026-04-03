@@ -70,9 +70,9 @@ impl super::Engine {
         let all_roles = [Role::Blind, Role::Delayed, Role::Hallucinating];
         let remaining: Vec<Role> = all_roles.iter().copied().filter(|r| *r != chosen).collect();
 
-        self.players[0].role = chosen;
-        self.players[1].role = remaining[0];
-        self.players[2].role = remaining[1];
+        self.session.players[0].role = chosen;
+        self.session.players[1].role = remaining[0];
+        self.session.players[2].role = remaining[1];
         self.human_idx = 0;
         self.chosen_role = Some(chosen);
 

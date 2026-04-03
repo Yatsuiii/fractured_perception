@@ -20,7 +20,7 @@ impl super::Engine {
                 self.renderer.draw_view(self.state.current(), &view)?;
 
                 if *self.state.current() == crate::state::GameState::Dialogue {
-                    if let Some(ref session) = self.dialogue_session {
+                    if let Some(ref session) = self.session.dialogue_session {
                         self.renderer.draw_dialogue_overlay(session)?;
                     }
                 }
@@ -38,15 +38,15 @@ impl super::Engine {
         perception::build_view(
             self.human(),
             &player_entities,
-            &self.world,
-            &self.position_history,
+            &self.session.world,
+            &self.session.position_history,
             self.time.elapsed,
             &overrides,
         )
     }
 
     fn inject_panel_extras(&self, view: &mut PlayerView) {
-        if let Some((seq_id, flash_time)) = self.puzzle_flash {
+        if let Some((seq_id, flash_time)) = self.session.puzzle_flash {
             if self.time.elapsed - flash_time < 2.0 {
                 view.panel_lines.push(PanelLine { text: String::new(), color: PanelColor::Grey });
                 view.panel_lines.push(PanelLine {
@@ -78,10 +78,10 @@ impl super::Engine {
             });
         }
 
-        if !self.event_log.is_empty() {
+        if !self.session.event_log.is_empty() {
             view.panel_lines.push(PanelLine { text: String::new(), color: PanelColor::Grey });
             view.panel_lines.push(PanelLine { text: "─ TEAM LOG ─".into(), color: PanelColor::DarkGrey });
-            for entry in &self.event_log.entries {
+            for entry in &self.session.event_log.entries {
                 let age = self.time.elapsed - entry.elapsed;
                 let color = if age < 4.0 { entry.color } else { PanelColor::DarkGrey };
                 view.panel_lines.push(PanelLine { text: entry.text.clone(), color });

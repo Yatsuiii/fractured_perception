@@ -4,29 +4,28 @@ use crate::{
     input::Key,
     perception::PanelColor,
     state::GameState,
+    world::entity::Entity,
 };
 
 impl super::Engine {
     pub(super) fn try_start_dialogue(&mut self) -> bool {
-        let (npc_entity, _) = match self.closest_entity_in_range(&self.npc_entities.clone(), 4.0) {
-            Some(c) => c,
-            None => return false,
+        let Some((npc_entity, _)) = self.closest_entity_in_range(&self.session.npc_entities, 4.0) else {
+            return false;
         };
 
-        let npc_name = match self.world.get_npc_marker(npc_entity) {
-            Some(m) => m.name,
-            None => return false,
+        let Some(m) = self.session.world.get_npc_marker(npc_entity) else {
+            return false;
         };
+        let npc_name = m.name;
 
         let role = self.human().role;
         let trust = self.human().trust_for(npc_entity, self.npc_base_trust(npc_entity));
 
-        let lines = match dialogue::get_dialogue(npc_name, role, trust) {
-            Some(l) => l,
-            None => return false,
+        let Some(lines) = dialogue::get_dialogue(npc_name, role, trust) else {
+            return false;
         };
 
-        self.dialogue_session = Some(DialogueSession {
+        self.session.dialogue_session = Some(DialogueSession {
             npc_entity,
             npc_name,
             lines,
@@ -47,27 +46,34 @@ impl super::Engine {
 
         if self.input.is_pressed(&Key::E) || self.input.is_pressed(&Key::Enter) {
             self.apply_current_dialogue_line();
+            self.advance_dialogue();
+        }
+    }
 
-            let finished = match self.dialogue_session.as_mut() {
-                Some(session) => !session.advance(),
-                None => true,
-            };
+    fn advance_dialogue(&mut self) {
+        let finished = match self.session.dialogue_session.as_mut() {
+            Some(session) => !session.advance(),
+            None => true,
+        };
 
-            if finished {
-                self.end_dialogue();
-            }
+        if finished {
+            self.end_dialogue();
         }
     }
 
     fn apply_current_dialogue_line(&mut self) {
-        let (npc_entity, trust_delta, stat_nudge) = match &self.dialogue_session {
-            Some(session) => match session.current() {
-                Some(line) => (session.npc_entity, line.trust_delta, line.stat_nudge),
-                None => return,
-            },
-            None => return,
-        };
+        let Some(session) = &self.session.dialogue_session else { return; };
+        let Some(line) = session.current() else { return; };
 
+        let npc_entity = session.npc_entity;
+        let trust_delta = line.trust_delta;
+        let stat_nudge = line.stat_nudge;
+
+        self.apply_trust_from_line(npc_entity, trust_delta);
+        self.apply_stat_nudge_from_line(stat_nudge);
+    }
+
+    fn apply_trust_from_line(&mut self, npc_entity: Entity, trust_delta: f32) {
         if trust_delta.abs() > f32::EPSILON {
             let base = self.npc_base_trust(npc_entity);
             self.human_mut().adjust_trust(npc_entity, trust_delta, base);
@@ -77,21 +83,24 @@ impl super::Engine {
                 reason: TrustReason::Dialogue,
             });
         }
+    }
 
+    fn apply_stat_nudge_from_line(&mut self, stat_nudge: (f32, f32, f32, f32)) {
         let hs = &mut self.human_mut().hidden_state;
         let (truth, chaos, illusion, balance) = stat_nudge;
-        if truth > 0.0    { hs.add_truth(truth); }
-        if chaos > 0.0    { hs.add_chaos(chaos); }
-        if illusion > 0.0 { hs.add_illusion(illusion); }
-        if balance > 0.0  { hs.add_balance(balance); }
+        
+        if truth.abs() > f32::EPSILON    { hs.add_truth(truth); }
+        if chaos.abs() > f32::EPSILON    { hs.add_chaos(chaos); }
+        if illusion.abs() > f32::EPSILON { hs.add_illusion(illusion); }
+        if balance.abs() > f32::EPSILON  { hs.add_balance(balance); }
     }
 
     fn end_dialogue(&mut self) {
-        if let Some(session) = self.dialogue_session.take() {
+        if let Some(session) = self.session.dialogue_session.take() {
             let npc_name = session.npc_name;
             self.events.emit(Event::DialogueEnded { npc: session.npc_entity });
             self.session_logger.log(&format!("  Dialogue ended: {}", npc_name));
-            self.event_log.push(
+            self.session.event_log.push(
                 format!("  Spoke with {}", npc_name),
                 PanelColor::Cyan,
                 self.time.elapsed,

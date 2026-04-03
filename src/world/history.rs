@@ -62,6 +62,7 @@ impl PositionHistory {
         best
     }
 
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.snapshots.clear();
     }
